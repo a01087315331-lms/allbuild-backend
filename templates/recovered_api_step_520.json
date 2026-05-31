@@ -1,0 +1,8 @@
+{
+  "step_index": 520,
+  "source": "MODEL",
+  "type": "RUN_COMMAND",
+  "status": "DONE",
+  "created_at": "2026-05-20T07:43:31Z",
+  "content": "Created At: 2026-05-20T07:43:31Z\nCompleted At: 2026-05-20T07:43:36Z\n\n\t\t\t\tThe command completed successfully.\n\t\t\t\tOutput:\n\t\t\t\t\r\nroutes\\api.js:17:router.get('/search', async (req, res) => {\r\nroutes\\api.js:43:router.post('/download-excel', (req, res) => {\r\nroutes\\api.js:77:router.post('/ocr', upload.single('image'), async (req, res) => {\r\nroutes\\api.js:107:router.post('/upload-excel', upload.single('excelFile'), async (req, res) => {\r\nroutes\\api.js:181:router.post('/financial-report', (req, res) => {\r\nroutes\\api.js:206:router.get('/business-info', async (req, res) => {\r\nroutes\\api.js:249:router.post('/business-info', async (req, res) => {\r\nroutes\\api.js:305:router.get('/financial-stats', async (req, res) => {\r\nroutes\\api.js:341:router.get('/download-settlement', async (req, res) => {\r\nroutes\\api.js:376:router.post('/download-settlement', async (req, res) => {\r\nroutes\\api.js:412:router.post('/orders/:id/revenue', async (req, res) => {\r\nroutes\\api.js:435:router.get('/auth/check-setup', async (req, res) => {\r\nroutes\\api.js:458:router.post('/auth/setup', async (req, res) => {\r\nroutes\\api.js:526:router.post('/auth/login', async (req, res) => {\r\nroutes\\api.js:571:router.post('/parser/upload-order', upload.single('orderFile'), async (req, res) => {\r\nroutes\\api.js:601:router.get('/parser/download-template', (req, res) => {\r\nroutes\\api.js:616:router.post('/parser/submit-form', templateUpload, (req, res) => {\r\nroutes\\api.js:666:router.post('/orders/bulk-register', async (req, res) => {\r\n\r\n\r\n\n"
+}

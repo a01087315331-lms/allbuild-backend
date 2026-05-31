@@ -1,0 +1,34 @@
+"<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>올빌드 자재주문요청서</title>
+    <!-- 테일윈드 CSS CDN 로드하여 미려한 UI 구현 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans KR', 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen py-10 px-4">
+    <div class="max-w-4xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+        <!-- 헤더 섹션 -->
+        <div class="bg-gradient-to-r from-indigo-900 to-indigo-800 text-white p-8 text-center relative">
+            <h1 class="text-3xl font-extrabold tracking-tight">📦 올빌드 자재주문요청서</h1>
+            <p class="text-indigo-200 mt-2 text-sm font-medium">자재 품목을 작성하고 사진/엑셀 자료를 첨부하여 올빌드 시스템으로 즉시 전송하세요.</p>
+        </div>
+
+        <!-- multipart/form-data 방식으로 파일과 폼 데이터를 함께 전송 -->
+        <form id="orderForm" action="http://localhost:5000/api/parser/submit-form" method="POST" enctype="multipart/form-data" class="p-8 space-y-6">
+            <!-- 숨겨진 인풋: 자재 목록 JSON 데이터를 포장해서 담아 보냄 -->
+            <input type="hidden" name="items" id="itemsInput">
+
+            <!-- 안내 가이드 -->
+            <div class="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-xl">
+                <p class="text-sm text-indigo-800 font-bold">💡 사용 가이드</p>
+                <p class="text-xs text-indigo-600 mt-1">1. 테이블 각 행에 구매할 자재의 품명, 규격, 수량 등을 입력하세요.</p>
+                <p 
+<truncated 13882 bytes>

@@ -1,0 +1,24 @@
+{
+  "step_index": 337,
+  "source": "MODEL",
+  "type": "PLANNER_RESPONSE",
+  "status": "DONE",
+  "created_at": "2026-05-20T07:02:49Z",
+  "tool_calls": [
+    {
+      "name": "replace_file_content",
+      "args": {
+        "AllowMultiple": "false",
+        "Description": "\"자재주문요청서 템플릿 다운로드 및 원클릭 폼 제출 연동 라우트 추가\"",
+        "EndLine": "597",
+        "Instruction": "\"템플릿 다운로드 및 원클릭 전송 라우트 추가\"",
+        "ReplacementContent": "\"    }\\n});\\n\\n/**\\n * [GET] /api/parser/download-template\\n * 자재주문요청서 양식 HTML 파일을 다운로드합니다.\\n */\\nrouter.get('/parser/download-template', (req, res) => {\\n    const path = require('path');\\n    const templatePath = path.join(__dirname, '../templates/자재주문요청서_양식.html');\\n    return res.download(templatePath, '자재주문요청서_양식.html');\\n});\\n\\n/**\\n * [POST] /api/parser/submit-form\\n * 작성 완료된 자재 데이터를 수신하여 올빌드 대시보드(프론트엔드)로 자동 리다이렉트합니다.\\n */\\nrouter.post('/parser/submit-form', (req, res) => {\\n    const { items } = req.body;\\n    \\n    if (!items) {\\n        return res.status(400).send('<h2>자재 데이터가 전송되지 않았습니다.</h2>');\\n    }\\n\\n    console.log(`[API] 템플릿 폼 주문 수신 완료: ${items}`);\\n\\n    // 대시보드 사이트로 리다이렉트하며 쿼리 스트링으로 데이터를 실어 보냄\\n    const redirectUrl = `http://localhost:5173/?source=direct-import&data=${encodeURIComponent(items)}`;\\n    return res.redirect(redirectUrl);\\n});\\n\\nmodule.exports = router;\"",
+        "StartLine": "594",
+        "TargetContent": "\"    }\\n});\\n\\nmodule.exports = router;\"",
+        "TargetFile": "\"C:\\\\Users\\\\user\\\\Documents\\\\올빌드\\\\server/routes/api.js\"",
+        "toolAction": "\"템플릿 다운로드 및 연동 라우트 추가\"",
+        "toolSummary": "\"템플릿 다운로드 및 연동 라우트 추가\""
+      }
+    }
+  ]
+}
