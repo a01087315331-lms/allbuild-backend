@@ -101,66 +101,102 @@ function generateReportData(selectedProducts, reportType = 'ORDER') {
  */
 async function generateDailyAndMonthlyReports() {
     try {
-        console.log('[보고서 생성기] DB 데이터를 수집하여 HTML 슬라이드 보고서를 빌드합니다...');
+        console.log('[보고서 생성기] 최적화된 리포트 빌드 개시...');
 
-        // 1. orders 테이블에서 전체 데이터 조회
-        const { data: orders, error } = await supabase
+        // 1. 오늘 날짜 및 이번 달 구하기 (한국 시간대 KST 보정 반영)
+        const todayObj = new Date();
+        const kstOffset = 9 * 60 * 60 * 1000;
+        const todayKst = new Date(todayObj.getTime() + kstOffset);
+        const todayStr = todayKst.toISOString().split('T')[0]; // YYYY-MM-DD
+        const thisMonthStr = todayStr.substring(0, 7); // YYYY-MM
+
+        // 2. 성능 비약적 향상을 위해 최근 3일 이내에 주문이 생성된 데이터만 선별 쿼리
+        const threeDaysAgo = new Date();
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+        const threeDaysAgoStr = threeDaysAgo.toISOString().split('T')[0];
+
+        // 전체 데이터를 긁지 않고, 최근 3일 이내의 날짜 데이터만 Supabase에서 가볍게 로드
+        const { data: recentOrders, error: recentError } = await supabase
             .from('orders')
-            .select('*')
-            .order('order_date', { ascending: false });
+            .select('order_date')
+            .gte('order_date', `${threeDaysAgoStr}T00:00:00.000Z`);
 
-        if (error) {
-            console.error('[보고서 생성기 DB 에러]:', error);
-            return;
-        }
+        if (recentError) throw recentError;
 
-        if (!orders || orders.length === 0) {
-            console.log('[보고서 생성기] 생성할 발주 내역이 존재하지 않습니다.');
-            return;
-        }
+        // 중복을 제거하며 빌드할 타겟 날짜 및 월도를 Set으로 관리
+        const targetDays = new Set();
+        targetDays.add(todayStr); // 오늘 날짜 기본 탑재
+        
+        const targetMonths = new Set();
+        targetMonths.add(thisMonthStr); // 이번 달 기본 탑재
 
-        // 2. 보고서 저장 전용 디렉토리 확보 (server/reports)
+        (recentOrders || []).forEach(item => {
+            if (!item.order_date) return;
+            const dateObj = new Date(item.order_date);
+            const kstDate = new Date(dateObj.getTime() + kstOffset);
+            const dateStr = kstDate.toISOString().split('T')[0];
+            const monthStr = dateStr.substring(0, 7);
+            
+            targetDays.add(dateStr);
+            targetMonths.add(monthStr);
+        });
+
+        // 3. 보고서 저장 폴더 확보 (server/reports)
         const reportsDir = path.join(__dirname, '../reports');
         if (!fs.existsSync(reportsDir)) {
             fs.mkdirSync(reportsDir, { recursive: true });
         }
 
-        // 3. 일별 및 월별 그룹화 진행
-        const dailyGroups = {};
-        const monthlyGroups = {};
+        // 4. 타겟으로 지정된 각각의 일자별로 최신 데이터를 가져와 일별 HTML 손익표 빌드
+        for (const date of targetDays) {
+            const start = `${date}T00:00:00.000Z`;
+            const end = `${date}T23:59:59.999Z`;
+            
+            const { data: dayOrders, error: dayErr } = await supabase
+                .from('orders')
+                .select('*')
+                .gte('order_date', start)
+                .lte('order_date', end)
+                .order('order_date', { ascending: false });
 
-        orders.forEach(item => {
-            if (!item.order_date) return;
-            const dateObj = new Date(item.order_date);
-            // 한국 시간대(KST) 보정
-            const kstOffset = 9 * 60 * 60 * 1000;
-            const kstDate = new Date(dateObj.getTime() + kstOffset);
-            const dateStr = kstDate.toISOString().split('T')[0]; // YYYY-MM-DD
-            const monthStr = dateStr.substring(0, 7); // YYYY-MM
+            if (dayErr) {
+                console.error(`[보고서 생성기] 일별 데이터 로딩 실패 (${date}):`, dayErr);
+                continue;
+            }
 
-            // 일별 그룹
-            if (!dailyGroups[dateStr]) dailyGroups[dateStr] = [];
-            dailyGroups[dateStr].push(item);
-
-            // 월별 그룹
-            if (!monthlyGroups[monthStr]) monthlyGroups[monthStr] = [];
-            monthlyGroups[monthStr].push(item);
-        });
-
-        // 4. 일별 보고서 파일 생성
-        for (const [date, items] of Object.entries(dailyGroups)) {
-            const htmlContent = buildSlideHtml(date, items, 'DAILY');
-            const filePath = path.join(reportsDir, `daily_report_${date}.html`);
-            fs.writeFileSync(filePath, htmlContent, 'utf8');
-            console.log(`[보고서 생성] 일별 보고서 저장 완료: ${filePath}`);
+            if (dayOrders && dayOrders.length > 0) {
+                const htmlContent = buildSlideHtml(date, dayOrders, 'DAILY');
+                const filePath = path.join(reportsDir, `daily_report_${date}.html`);
+                fs.writeFileSync(filePath, htmlContent, 'utf8');
+                console.log(`[보고서 생성] 일별 보고서 저장 완료: ${filePath}`);
+            }
         }
 
-        // 5. 월별 보고서 파일 생성
-        for (const [month, items] of Object.entries(monthlyGroups)) {
-            const htmlContent = buildSlideHtml(month, items, 'MONTHLY');
-            const filePath = path.join(reportsDir, `monthly_report_${month}.html`);
-            fs.writeFileSync(filePath, htmlContent, 'utf8');
-            console.log(`[보고서 생성] 월별 보고서 저장 완료: ${filePath}`);
+        // 5. 타겟으로 지정된 각각의 월별로 최신 데이터를 가져와 월별 HTML 손익표 빌드
+        for (const month of targetMonths) {
+            const [year, mVal] = month.split('-').map(Number);
+            const start = `${month}-01T00:00:00.000Z`;
+            const lastDay = new Date(year, mVal, 0).getDate();
+            const end = `${month}-${lastDay}T23:59:59.999Z`;
+
+            const { data: monthOrders, error: monthErr } = await supabase
+                .from('orders')
+                .select('*')
+                .gte('order_date', start)
+                .lte('order_date', end)
+                .order('order_date', { ascending: false });
+
+            if (monthErr) {
+                console.error(`[보고서 생성기] 월별 데이터 로딩 실패 (${month}):`, monthErr);
+                continue;
+            }
+
+            if (monthOrders && monthOrders.length > 0) {
+                const htmlContent = buildSlideHtml(month, monthOrders, 'MONTHLY');
+                const filePath = path.join(reportsDir, `monthly_report_${month}.html`);
+                fs.writeFileSync(filePath, htmlContent, 'utf8');
+                console.log(`[보고서 생성] 월별 보고서 저장 완료: ${filePath}`);
+            }
         }
 
     } catch (err) {
