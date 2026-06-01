@@ -411,16 +411,18 @@
             maxSuggestItems : 5
         }).embed(element_frame);
     }
-    // 폼 최종 제출(Submit) 시 입력된 자재 데이터 정형화 및 백엔드 전송 데이터 적재
-    document.getElementById('orderForm').addEventListener('submit', function(e) {
+    // [UX 개선] 폼 최종 제출(Submit) 시 페이지 리다이렉트 없이 Fetch API(비동기)로 안전하게 본사 전송을 수행합니다.
+    document.getElementById('orderForm').addEventListener('submit', async function(e) {
+        e.preventDefault(); // 기본 동기 제출 방지
         const form = e.target;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalBtnText = submitBtn ? submitBtn.innerHTML : '🚀 올빌드 본사로 주문 요청하기';
         
         // [방어 코드] 로컬 파일(file:///) 또는 템플릿 환경에 따른 본사 API 호스트 결정
         let apiHost = '%%API_HOST%%';
         if (apiHost.includes('%%API_HOST%%') || apiHost.includes('%API_HOST%')) {
             apiHost = window.location.protocol === 'file:' ? 'https://allbuild-backend.onrender.com' : window.location.origin;
         }
-        form.action = apiHost + '/api/parser/submit-form';
 
         // 전체 25개 입력행 중에서 실제로 사용자가 작성한 항목만 수집합니다.
         const items = [];
@@ -442,7 +444,7 @@
                 items.push({
                     mall_name: '현장직접입력',
                     product_name: nameInput.value.trim() + (remark ? ` [비고: ${remark}]` : ''),
-                    price: 0, // 단가는 본사 측에서 나중에 확인하여 입력하므로 0원 세팅
+                    price: 0,
                     tax: 0,
                     shipping_fee: 0,
                     spec: specInput.value.trim() || '일반규격',
@@ -453,7 +455,6 @@
         });
 
         if (!hasValidItem) {
-            e.preventDefault();
             alert('최소 한 개 이상의 자재 품명과 수량을 정확하게 입력해 주세요.');
             return;
         }
@@ -466,7 +467,6 @@
         const receiver = document.getElementById('receiver_info').value.trim();
 
         if (!zip || !basic) {
-            e.preventDefault();
             alert('배송을 위해 [우편번호 찾기]를 통해 주소를 입력해 주셔야 합니다.');
             return;
         }
@@ -476,14 +476,67 @@
         if (unloading) finalAddress += ` [하차지: ${unloading}]`;
         if (receiver) finalAddress += ` [인수안내: ${receiver}]`;
 
-        // 히든 필드에 데이터 바인딩
-        document.getElementById('addressInput').value = finalAddress;
-        document.getElementById('itemsInput').value = JSON.stringify(items);
+        // 버튼 로딩 상태 표시
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '⏳ 본사 전송 중...';
+            submitBtn.style.backgroundColor = '#475569';
+        }
+
+        // FormData 객체 빌드 (비동기 multipart/form-data 전송용)
+        const formData = new FormData();
+        formData.append('site_name', document.getElementById('siteNameInput').value);
+        formData.append('requester', document.getElementById('requesterInput').value);
+        formData.append('phone', document.getElementById('requester_phone').value);
+        formData.append('email', ''); // 스탠드얼론 폼용 이메일 기본값 설정
+        formData.append('address', finalAddress);
+        formData.append('items', JSON.stringify(items));
+
+        // 1페이지 및 2페이지의 첨부 파일 추가
+        const fileInput1 = document.getElementById('imgLoader1');
+        if (fileInput1 && fileInput1.files) {
+            for (let i = 0; i < fileInput1.files.length; i++) {
+                formData.append('photoFiles', fileInput1.files[i]);
+            }
+        }
         
-        // 폼 필드 연동 바인딩
-        document.getElementById('siteNameHidden').value = document.getElementById('siteNameInput').value;
-        document.getElementById('requesterHidden').value = document.getElementById('requesterInput').value;
-        document.getElementById('phoneHidden').value = document.getElementById('requester_phone').value;
+        const fileInput2 = document.getElementById('imgLoader2');
+        if (fileInput2 && fileInput2.files) {
+            for (let i = 0; i < fileInput2.files.length; i++) {
+                formData.append('photoFiles', fileInput2.files[i]);
+            }
+        }
+
+        try {
+            // 본사 서버의 전송 핸들러를 호출합니다.
+            const response = await fetch(apiHost + '/api/parser/submit-form', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const resData = await response.json();
+                alert(`🎉 [전송 성공] 자재주문서가 본사 데이터베이스로 정상 전송되었습니다!\n접수 품목 수: ${resData.count || items.length}개`);
+                
+                // 전송 성공 시 폼 초기화
+                form.reset();
+                document.getElementById('preview1').innerHTML = '';
+                document.getElementById('preview2').innerHTML = '';
+                syncSiteName();
+            } else {
+                const errText = await response.text();
+                alert(`❌ [전송 실패] 본사 서버에서 에러를 반환했습니다:\n${errText}`);
+            }
+        } catch (err) {
+            console.error('[전송 오류]', err);
+            alert(`❌ [통신 오류] 본사 서버 연결에 실패했습니다. 네트워크 연결을 확인하거나 올빌드 본사 서버 상태를 진단받으십시오.\n(상세: ${err.message})`);
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+                submitBtn.style.backgroundColor = '#2563eb';
+            }
+        }
     });
 </script>
 
