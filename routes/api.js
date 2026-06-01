@@ -1080,7 +1080,8 @@ router.post('/email/send-estimate', async (req, res) => {
             auth: {
                 user: emailUser,
                 pass: emailPass
-            }
+            },
+            family: 4 // IPv6 연결 차단 우회를 위한 IPv4 강제 지정
         });
 
         const mailOptions = {
