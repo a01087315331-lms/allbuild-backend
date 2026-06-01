@@ -1074,7 +1074,9 @@ router.post('/email/send-estimate', async (req, res) => {
 
         // 실제 Gmail/Naver SMTP 발송 설정
         const transporter = nodemailer.createTransport({
-            service: 'gmail',
+            host: 'smtp.gmail.com',
+            port: 465,
+            secure: true, // SSL 포트 465 사용
             auth: {
                 user: emailUser,
                 pass: emailPass
