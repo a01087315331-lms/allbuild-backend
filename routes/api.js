@@ -944,6 +944,9 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
             console.warn('[로컬 백업 경고] 현장자재요청서 로컬 PC 저장 중 오류 발생:', localErr);
         }
 
+        let emailStatus = 'SUCCESS';
+        let emailErrorDetail = null;
+
         // [신규 추가] 본사 관리자(allbuild.order@gmail.com) 및 현장 신청자 이메일로 요청서 HTML 자동 발송
         try {
             const emailUser = process.env.EMAIL_USER;
@@ -981,9 +984,13 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
                 console.log(`[알림 메일 발송 성공] MessageID: ${mailInfo.messageId}, 수신처: ${recipientList.join(', ')}`);
             } else {
                 console.warn('[알림 메일 경고] EMAIL_USER 또는 EMAIL_PASS 환경변수가 누락되어 알림 메일을 전송하지 못했습니다.');
+                emailStatus = 'FAILED';
+                emailErrorDetail = '이메일 발송용 환경변수 누락';
             }
         } catch (emailErr) {
             console.error('[알림 메일 오류] 현장 주문 알림 메일 전송 실패:', emailErr);
+            emailStatus = 'FAILED';
+            emailErrorDetail = emailErr.message || '알 수 없는 SMTP 연결 에러';
             // 이메일 발송이 실패하더라도 이미 DB 저장은 성공하였으므로 사용자 응답은 에러를 처리하지 않고 흘려보냅니다.
         }
 
@@ -998,7 +1005,9 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
     // 기존에 존재하지 않는 5173 포트로의 리디렉션 시도로 인해 발생하던 클라이언트 통신 오류(CORS 및 네트워크 에러)를 방지합니다.
     return res.json({
         success: true,
-        message: '현장 주문서가 안전하게 접수되었습니다.',
+        message: emailStatus === 'SUCCESS'
+            ? `🎉 [전송 성공] 자재주문서가 본사 데이터베이스로 정상 전송되었으며, 알림 메일이 발송되었습니다!`
+            : `⚠️ [접수 성공 단, 메일 발송 실패]\n주문서 접수는 정상 완료되었으나 알림 메일 발송은 실패했습니다.\n(원인: ${emailErrorDetail})`,
         count: parsedItems.length
     });
 });
