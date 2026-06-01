@@ -1073,6 +1073,7 @@ router.post('/email/send-estimate', async (req, res) => {
         }
 
         // 실제 Gmail/Naver SMTP 발송 설정
+        const dns = require('dns');
         const transporter = nodemailer.createTransport({
             host: 'smtp.gmail.com',
             port: 587,
@@ -1081,7 +1082,9 @@ router.post('/email/send-estimate', async (req, res) => {
                 user: emailUser,
                 pass: emailPass
             },
-            family: 4 // IPv6 연결 차단 우회를 위한 IPv4 강제 지정
+            lookup: (hostname, options, callback) => {
+                return dns.lookup(hostname, { family: 4 }, callback);
+            }
         });
 
         const mailOptions = {
