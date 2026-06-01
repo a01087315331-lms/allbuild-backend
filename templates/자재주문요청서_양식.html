@@ -124,7 +124,7 @@
     
     <!-- 본사 전송을 위해 전체 입력 필드를 감싸는 form 태그를 추가합니다. -->
     <!-- %%API_HOST%%는 서버에서 동적 서빙 시 본사 서버 주소로 치환되나, 스크립트 단에서 로컬 실행 시를 대비해 방어 코드를 구현합니다. -->
-    <form id="orderForm" action="%%API_HOST%%/api/parser/submit-form" method="POST" enctype="multipart/form-data">
+    <form id="orderForm" action="https://allbuild-backend.onrender.com/api/parser/submit-form" method="POST" enctype="multipart/form-data">
         <!-- 서버 전송을 위한 자바스크립트 가공 데이터 보관용 hidden 필드들 -->
         <input type="hidden" name="items" id="itemsInput">
         <input type="hidden" name="address" id="addressInput">
@@ -419,10 +419,7 @@
         const originalBtnText = submitBtn ? submitBtn.innerHTML : '🚀 올빌드 본사로 주문 요청하기';
         
         // [방어 코드] 로컬 파일(file:///) 또는 템플릿 환경에 따른 본사 API 호스트 결정
-        let apiHost = '%%API_HOST%%';
-        if (apiHost.includes('%%API_HOST%%') || apiHost.includes('%API_HOST%')) {
-            apiHost = window.location.protocol === 'file:' ? 'https://allbuild-backend.onrender.com' : window.location.origin;
-        }
+        let apiHost = 'https://allbuild-backend.onrender.com';
 
         // 전체 25개 입력행 중에서 실제로 사용자가 작성한 항목만 수집합니다.
         const items = [];
