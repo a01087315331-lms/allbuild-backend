@@ -518,7 +518,8 @@
                     
                     items.push({
                         mall_name: '현장직접입력',
-                        product_name: (brand ? '[' + brand + '] ' : '') + nameInput.value.trim() + (remark ? ' [비고: ' + remark + ']' : ''),
+                        // [수정] 제조사 앞뒤에 붙던 대괄호 기호([, ])를 제거하고 공백 한 칸으로만 연결합니다.
+                        product_name: (brand ? brand + ' ' : '') + nameInput.value.trim() + (remark ? ' [비고: ' + remark + ']' : ''),
                         price: 0,
                         tax: 0,
                         shipping_fee: 0,
