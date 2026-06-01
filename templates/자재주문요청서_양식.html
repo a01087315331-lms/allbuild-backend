@@ -415,11 +415,12 @@
     document.getElementById('orderForm').addEventListener('submit', function(e) {
         const form = e.target;
         
-        // [방어 코드] 로컬 파일(file:///)로 열었을 경우 API Host 주소를 실서버 주소(https://allbuild-backend.onrender.com)로 자동 설정합니다.
-        if (form.action.includes('%%API_HOST%%')) {
-            const apiHost = window.location.protocol === 'file:' ? 'https://allbuild-backend.onrender.com' : window.location.origin;
-            form.action = form.action.replace('%%API_HOST%%', apiHost);
+        // [방어 코드] 로컬 파일(file:///) 또는 템플릿 환경에 따른 본사 API 호스트 결정
+        let apiHost = '%%API_HOST%%';
+        if (apiHost.includes('%%API_HOST%%') || apiHost.includes('%API_HOST%')) {
+            apiHost = window.location.protocol === 'file:' ? 'https://allbuild-backend.onrender.com' : window.location.origin;
         }
+        form.action = apiHost + '/api/parser/submit-form';
 
         // 전체 25개 입력행 중에서 실제로 사용자가 작성한 항목만 수집합니다.
         const items = [];
