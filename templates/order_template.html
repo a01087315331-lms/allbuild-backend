@@ -3,38 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>자재 주문요청서 작성 프로그램 (결재란 포함)</title>
-    <!-- [보안 우회 브릿지] 로컬 file:/// 실행 시 카카오 주소 API의 postMessage 통신 차단을 우회하기 위해,
-         실행 중인 올빌드 로컬 서버(http://localhost:5000)를 감지하여 웹 도메인 주소로 자동 리다이렉트합니다. -->
-    <script>
-        (function() {
-            if (window.location.protocol === 'file:') {
-                // 로컬 서버의 헬스체크 API를 호출하여 서버가 가동 중인지 확인합니다.
-                const checkUrl = 'https://allbuild-backend.onrender.com/api/health';
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5초 타임아웃
-                
-                fetch(checkUrl, { signal: controller.signal })
-                    .then(response => response.json())
-                    .then(data => {
-                        clearTimeout(timeoutId);
-                        if (data && data.status === 'ok') {
-                            // 로컬 서버가 가동 중이므로, 해당 서버 도메인의 템플릿 정적 서빙 경로로 주소를 강제 전환합니다.
-                            window.location.replace('https://allbuild-backend.onrender.com/templates/자재주문요청서_양식.html?v=' + Date.now());
-                        }
-                    })
-                    .catch(error => {
-                        // 서버가 미가동 상태인 경우, 사용자 편의를 위해 화면 상단에 경고 안내 플로팅 배너를 출력합니다.
-                        console.warn('[알림] 올빌드 로컬 서버가 구동되고 있지 않아 주소 자동 입력 기능이 작동하지 않습니다.');
-                        window.addEventListener('DOMContentLoaded', () => {
-                            const banner = document.createElement('div');
-                            banner.style.cssText = 'background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; padding: 12px; text-align: center; font-weight: bold; font-size: 0.95rem; position: sticky; top: 0; z-index: 99999;';
-                            banner.innerHTML = '⚠️ <b>알림:</b> 올빌드 서버(올빌드_서버_실행.bat)가 실행 중이 아닙니다. 서버를 가동하신 후 이 파일을 다시 열어야 주소 찾기 후 <b>[자동 주소 입력]</b>이 정상적으로 작동합니다.';
-                            document.body.insertBefore(banner, document.body.firstChild);
-                        });
-                    });
-            }
-        })();
-    </script>
+
     <!-- [API 로드] 카카오(Daum) 우편번호 검색 서비스 라이브러리를 추가합니다 -->
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <style>
