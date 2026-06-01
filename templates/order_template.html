@@ -570,6 +570,17 @@
             var emailHidden = document.getElementById('emailHidden');
             if(emailHidden) emailHidden.value = document.getElementById('requesterEmailInput') ? document.getElementById('requesterEmailInput').value : '';
  
+            // returnUrl 히든 필드 동적 생성 및 값 설정 (동적 복귀 지원)
+            var returnUrlHidden = document.getElementById('returnUrlHidden');
+            if (!returnUrlHidden) {
+                returnUrlHidden = document.createElement('input');
+                returnUrlHidden.type = 'hidden';
+                returnUrlHidden.id = 'returnUrlHidden';
+                returnUrlHidden.name = 'returnUrl';
+                form.appendChild(returnUrlHidden);
+            }
+            returnUrlHidden.value = window.location.href;
+
             // 버튼 로딩 상태 표시
             btn.innerText = '서버로 전송 중입니다...';
             btn.style.backgroundColor = '#4b5563';

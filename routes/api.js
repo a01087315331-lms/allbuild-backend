@@ -771,7 +771,7 @@ const templateUpload = upload.fields([
 ]);
 
 router.post('/parser/submit-form', templateUpload, async (req, res) => {
-    const { items, site_name, requester, address, phone, email, isFetch } = req.body;
+    const { items, site_name, requester, address, phone, email, isFetch, returnUrl } = req.body;
     
     if (!items) {
         return res.status(400).send('<h2>[오류] 자재 신청 목록 데이터가 누락되었습니다.</h2>');
@@ -1032,7 +1032,8 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
         });
     } else {
         // 동기 제출을 한 클라이언트를 위한 예쁜 성공 HTML 리포트 화면 및 3초 후 자동 리다이렉트
-        const returnUrl = 'https://www.allbuild.co.kr';
+        // 전달받은 returnUrl이 있으면 해당 주소(로컬 파일 등)로, 없으면 기본 홈페이지로 설정합니다.
+        const redirectUrl = req.body.returnUrl || 'https://www.allbuild.co.kr';
         const msg = emailStatus === 'SUCCESS'
             ? `본사 DB 전송 완료 및 알림 이메일(${mail !== '이메일미기재' ? mail + ', ' : ''}allbuild.order@gmail.com) 발송이 성공적으로 처리되었습니다.`
             : `본사 DB 전송은 완료되었으나 알림 이메일 발송 과정에서 오류가 발생했습니다. (사유: ${emailErrorDetail || 'SMTP 연결 에러'})`;
@@ -1118,7 +1119,7 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
             </style>
             <script>
               setTimeout(function() {
-                window.location.href = "${returnUrl}";
+                window.location.href = "${redirectUrl}";
               }, 3000);
             </script>
           </head>
@@ -1127,9 +1128,9 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
               <div class="icon-circle">✓</div>
               <h1>자재 주문 요청 완료</h1>
               <p class="status-msg">${msg}</p>
-              <a href="${returnUrl}" class="btn-home">즉시 웹페이지로 이동</a>
+              <a href="${redirectUrl}" class="btn-home">즉시 이전 화면으로 이동</a>
               <div class="redirect-info">
-                ⏰ <span id="timer">3</span>초 후 올빌드 웹페이지로 자동 이동합니다.
+                ⏰ <span id="timer">3</span>초 후 이전 화면으로 자동 이동합니다.
               </div>
             </div>
             <script>
