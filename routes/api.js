@@ -15,7 +15,7 @@ const nodemailer = require('nodemailer'); // [신규] 이메일 발송을 위한
 
 // 메모리에 파일을 보관하는 multer 설정
 const upload = multer({ storage: multer.memoryStorage() });
-const { extractSelectedProducts, generateReportData, generateDailyAndMonthlyReports } = require('../utils/reportGenerator');
+const { extractSelectedProducts, generateReportData, generateAllReports } = require('../utils/reportGenerator');
 const Tesseract = require('tesseract.js');
 
 /**
@@ -152,8 +152,8 @@ router.post('/upload-excel', upload.single('excelFile'), async (req, res) => {
 
         try {
             await saveOrders();
-            // [보고서] 발주 등록 완료 후 비동기로 일별/월별 보고서 자동 빌드
-            generateDailyAndMonthlyReports().catch(err => console.error('[보고서 생성 실패]:', err));
+            // [보고서] 발주 등록 완료 후 비동기로 전체 보고서 자동 빌드
+            generateAllReports().catch(err => console.error('[보고서 생성 실패]:', err));
 
             return res.json({
                 success: true,
@@ -305,6 +305,7 @@ router.post('/business-info', async (req, res) => {
  * DB에 저장된 모든 발주 데이터를 집계하여 통계를 반환합니다.
  */
 router.get('/financial-stats', async (req, res) => {
+    const { userRole } = req.query; // 요청 유저의 권한 정보 추출
     try {
         const { data, error } = await supabase
             .from('orders')
@@ -314,7 +315,33 @@ router.get('/financial-stats', async (req, res) => {
 
         if (error) throw error;
 
-        // 집계 로직
+        // [보안 핵심] 현장(SITE) 권한인 경우 본사의 진짜 재무/회계 데이터를 볼 수 없도록
+        // 매입가, 매출가, 배송비, 부가세 등 모든 가격 수치를 0원으로 강제 조작(원천 마스킹)하여 응답합니다.
+        if (userRole === 'SITE') {
+            const maskedItems = (data || []).map(item => ({
+                id: item.id,
+                order_date: item.order_date,
+                product_name: item.product_name,
+                price: 0,
+                tax: 0,
+                shipping_fee: 0,
+                total_price: 0,
+                revenue: 0,
+                order_status: 'COMPLETED',
+                site_name: item.site_name
+            }));
+
+            const stats = {
+                totalPurchase: 0,
+                totalTax: 0,
+                totalRevenue: 0,
+                items: maskedItems
+            };
+
+            return res.json({ success: true, data: stats });
+        }
+
+        // 집계 로직 (본사 ADMIN 권한용 실제 집계)
         const stats = {
             totalPurchase: 0, // 총 매입액
             totalTax: 0,      // 총 부가세
@@ -446,19 +473,19 @@ router.post('/download-settlement', async (req, res) => {
 
 /**
  * [POST] /api/orders/:id/revenue
- * 특정 발주 건의 매출액 및 매입 분개 항목들을 업데이트합니다.
+ * 특정 발주 건의 매출액(수익)을 업데이트합니다.
  */
 router.post('/orders/:id/revenue', async (req, res) => {
     const { id } = req.params;
-    const { revenue, price, tax, total_price, quantity } = req.body;
+    const { revenue, price, tax, total_price } = req.body;
 
     try {
+        // [보안/확장] 프론트엔드에서 안전하게 매입가 및 매출가를 수정할 수 있도록 조건부 업데이트 객체를 생성합니다.
         const updateData = {};
         if (revenue !== undefined) updateData.revenue = Number(revenue) || 0;
         if (price !== undefined) updateData.price = Number(price) || 0;
         if (tax !== undefined) updateData.tax = Number(tax) || 0;
         if (total_price !== undefined) updateData.total_price = Number(total_price) || 0;
-        if (quantity !== undefined) updateData.quantity = Number(quantity) || 1;
 
         const { error } = await supabase
             .from('orders')
@@ -467,13 +494,13 @@ router.post('/orders/:id/revenue', async (req, res) => {
 
         if (error) throw error;
 
-        // [보고서] 업데이트 성공 후 비동기로 일별/월별 보고서 자동 빌드
-        generateDailyAndMonthlyReports().catch(err => console.error('[보고서 생성 실패]:', err));
+        // [보고서] 업데이트 성공 후 비동기로 전체 손익 보고서 자동 빌드
+        generateAllReports().catch(err => console.error('[보고서 생성 실패]:', err));
 
-        return res.json({ success: true, message: '주문 재무 정보가 업데이트되었습니다.' });
+        return res.json({ success: true, message: '주문 거래 세무 정보가 정상 업데이트되었습니다.' });
     } catch (error) {
-        console.error('[API 에러] 주문 재무 정보 업데이트 중 오류:', error);
-        return res.status(500).json({ error: '주문 재무 정보 수정 중 오류가 발생했습니다.' });
+        console.error('[API 에러] 주문 금액 정보 업데이트 중 오류:', error);
+        return res.status(500).json({ error: '금액 정보 수정 중 서버 내부 DB 오류가 발생했습니다.' });
     }
 });
 
@@ -502,20 +529,17 @@ router.get('/auth/check-setup', async (req, res) => {
 
 /**
  * [POST] /api/auth/setup
- * 최초 비밀번호를 설정합니다. (본사 6자 이상, 현장 4자 이상 동적 보안 검증)
+ * 최초 비밀번호를 설정합니다. (비밀번호 6자 이상 강력 제한 규칙 적용)
  */
 router.post('/auth/setup', async (req, res) => {
-    const { username, password } = req.body;
-    const targetUser = username || 'allbuild';
-
+    const { password } = req.body;
     if (!password) {
         return res.status(400).json({ error: '비밀번호가 필요합니다.' });
     }
     
-    // [보안 규칙] 본사는 최소 6자 이상, 현장은 최소 4자 이상 강도 검증
-    const minLength = targetUser === 'allbuild' ? 6 : 4;
-    if (password.length < minLength) {
-        return res.status(400).json({ error: `비밀번호는 ${minLength}자 이상이어야 합니다.` });
+    // [보안 규칙] 비밀번호 최소 6자 이상 강도 검증 정책 적용
+    if (password.length < 6) {
+        return res.status(400).json({ error: '비밀번호는 6자 이상이어야 합니다.' });
     }
 
     try {
@@ -523,32 +547,30 @@ router.post('/auth/setup', async (req, res) => {
         const { data: existing } = await supabase
             .from('member_accounts')
             .select('id, password_hash')
-            .eq('username', targetUser)
+            .eq('username', 'allbuild')
             .single();
 
         const hashedPassword = await hashPassword(password);
-        const displayName = targetUser === 'allbuild' ? '올빌드 관리자' : '현장 담당자';
-        const userRole = targetUser === 'allbuild' ? 'ADMIN' : 'USER';
         
         let result;
         if (existing) {
             result = await supabase
                 .from('member_accounts')
-                .update({ password_hash: hashedPassword, real_name_encrypted: encrypt(displayName) })
+                .update({ password_hash: hashedPassword, real_name_encrypted: encrypt('올빌드 관리자') })
                 .eq('id', existing.id);
         } else {
             result = await supabase
                 .from('member_accounts')
                 .insert([{ 
-                    username: targetUser, 
+                    username: 'allbuild', 
                     password_hash: hashedPassword, 
-                    real_name_encrypted: encrypt(displayName),
-                    role: userRole
+                    real_name_encrypted: encrypt('올빌드 관리자'),
+                    role: 'ADMIN'
                 }]);
         }
 
         if (result.error) throw result.error;
-        return res.json({ success: true, message: `${displayName} 비밀번호가 성공적으로 설정되었습니다.` });
+        return res.json({ success: true, message: '비밀번호가 성공적으로 설정되었습니다.' });
     } catch (error) {
         console.error('[AUTH] 비밀번호 설정 에러:', error);
         return res.status(500).json({ error: '비밀번호 설정 중 오류가 발생했습니다.' });
@@ -557,7 +579,7 @@ router.post('/auth/setup', async (req, res) => {
 
 /**
  * [POST] /api/auth/login
- * 로그인을 처리합니다. (본사 6자 이상, 현장 4자 이상 동적 보안 검증)
+ * 로그인을 처리합니다. (비밀번호 최소 6자 이상 유효성 예외 통과)
  */
 router.post('/auth/login', async (req, res) => {
     const { username, password } = req.body;
@@ -568,10 +590,11 @@ router.post('/auth/login', async (req, res) => {
         return res.status(400).json({ error: '아이디와 비밀번호를 모두 입력해주세요.' });
     }
 
-    // [보안 규칙] 본사는 최소 6자 이상, 현장은 최소 4자 이상 검증
-    const minLength = username === 'allbuild' ? 6 : 4;
+    // [보안 규칙] 본사 관리자(allbuild)는 6자 이상 필수, 현장 계정은 4자 이상 허용
+    const isAllbuild = username === 'allbuild';
+    const minLength = isAllbuild ? 6 : 4;
     if (password.length < minLength) {
-        return res.status(400).json({ error: `비밀번호는 ${minLength}자 이상이어야 합니다.` });
+        return res.status(400).json({ error: `비밀번호는 최소 ${minLength}자 이상이어야 합니다.` });
     }
 
     try {
@@ -694,6 +717,7 @@ router.post('/orders/bulk-register', async (req, res) => {
 
     try {
         console.log(`[API] 현장 주문 접수 시작 - 현장: ${site_name}, 신청자: ${requester}, 품목수: ${items.length}`);
+        console.log('[DEBUG bulk-register] 수신된 원본 자재 목록(items):', JSON.stringify(items, null, 2));
         
         const ordersToInsert = items.map(item => {
             const price = Number(item.price) || 0;
@@ -703,11 +727,12 @@ router.post('/orders/bulk-register', async (req, res) => {
             return {
                 mall_name: item.mall_name || '기타',
                 product_name: `[${site_name}/${requester}] ${item.product_name || '이름 없음'}`,
-                site_name: site_name, // [신규] 현장명 단독 컬럼 저장
+                // [안내] Supabase DB orders 테이블에 site_name 컬럼이 존재하지 않으므로, 에러 방지를 위해 product_name 말머리에 현장명을 인코딩하여 저장하고 site_name 필드는 제외합니다.
                 price: price,
                 tax: tax,
                 shipping_fee: shipping,
                 total_price: price + tax + shipping,
+                quantity: Number(item.qty || item.quantity) || 1, // [수량 추가] qty 또는 quantity 필드를 읽어 숫자로 변환하여 저장합니다.
                 order_status: 'COMPLETED',
                 order_date: new Date()
             };
@@ -722,7 +747,7 @@ router.post('/orders/bulk-register', async (req, res) => {
             throw error;
         }
 
-        generateDailyAndMonthlyReports().catch(err => console.error('[보고서 생성 실패]:', err));
+        generateAllReports().catch(err => console.error('[보고서 생성 실패]:', err));
 
         console.log(`[API] 현장 주문 일괄 접수 완료! 건수: ${items.length}`);
         return res.json({
@@ -759,6 +784,7 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
     const mail = email ? email.trim() : '이메일미기재';
     const addr = address ? address.trim() : '주소미기재';
     const parsedItems = JSON.parse(items);
+    console.log('[DEBUG submit-form] 파싱된 자재 목록(parsedItems):', JSON.stringify(parsedItems, null, 2));
 
     const savedFilesInfo = [];
 
@@ -809,17 +835,17 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
             const price = Number(item.price) || 0;
             const tax = Number(item.tax) || 0;
             const shipping = Number(item.shipping_fee) || 0;
-            const qty = Number(item.quantity || item.qty) || 1; // 주문서 수량(quantity/qty) 파싱
             
             return {
+                // [수정] 테이블 스키마에 정의된 컬럼명인 mall_name으로 올바르게 매핑하여 DB 입력 에러를 해결합니다.
                 mall_name: item.mall_name || '현장직접입력',
                 product_name: `[${site}/${worker}/${tel}/${mail}/${addr}] ${item.product_name || '이름 없음'}${attachmentText}`,
-                site_name: site, // [신규] 현장명 컬럼에 저장
+                // [안내] Supabase DB orders 테이블에 site_name 컬럼이 존재하지 않으므로, 에러 방지를 위해 product_name 말머리에 현장명을 인코딩하여 저장하고 site_name 필드는 제외합니다.
                 price: price,
                 tax: tax,
                 shipping_fee: shipping,
                 total_price: price + tax + shipping,
-                quantity: qty,
+                quantity: Number(item.qty || item.quantity) || 1, // [수량 추가] qty 또는 quantity 필드를 읽어 숫자로 변환하여 저장합니다.
                 order_status: 'COMPLETED',
                 order_date: new Date()
             };
@@ -834,19 +860,105 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
             throw error;
         }
 
-        generateDailyAndMonthlyReports().catch(err => console.error('[보고서 생성 실패]:', err));
+        // [로컬 PC 자동 백업] 사용자 '문서' 폴더 아래 올빌드거래자료/현장자재요청서에 보관용 HTML을 생성합니다.
+        try {
+            const os = require('os');
+            const baseDir = path.join(os.homedir(), 'Documents/올빌드/올빌드거래자료');
+            const orderDir = path.join(baseDir, '현장자재요청서');
+            if (!fs.existsSync(orderDir)) {
+                fs.mkdirSync(orderDir, { recursive: true });
+            }
+
+            const dateStr = new Date().toISOString().split('T')[0];
+            const timeStr = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+            const filename = `올빌드_현장자재요청서_${site}_${dateStr}_${timeStr}.html`;
+
+            const itemRows = parsedItems.map((item, idx) => `
+              <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 10px; text-align: center;">${idx + 1}</td>
+                <td style="padding: 10px;">${item.mall_name || '현장신청'}</td>
+                <td style="padding: 10px; font-weight: bold;">${item.product_name}</td>
+                <td style="padding: 10px;">${item.spec || '-'}</td>
+                <td style="padding: 10px; text-align: center;">${item.unit || 'ea'}</td>
+                <td style="padding: 10px; text-align: right; font-weight: bold; color: #0B3C5D;">${Number(item.qty || item.quantity || 1)}</td>
+                <td style="padding: 10px; color: #666;">-</td>
+              </tr>
+            `).join('');
+
+            const localHtml = `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta charset="utf-8">
+                <title>올빌드 현장 자재 주문요청서 - 자동 보관 사본</title>
+                <style>
+                  body { font-family: sans-serif; padding: 20px; color: #333; }
+                  .header { border-bottom: 3px solid #0B3C5D; padding-bottom: 10px; margin-bottom: 20px; }
+                  .info-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                  .info-table th, .info-table td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
+                  .info-table th { background: #f4f4f4; text-align: left; width: 25%; }
+                  .item-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                  .item-table th { background: #0B3C5D; color: white; padding: 12px 10px; font-size: 14px; text-align: left; }
+                  .footer { margin-top: 40px; font-size: 12px; color: #777; text-align: center; }
+                </style>
+              </head>
+              <body>
+                <div class="header">
+                  <h2 style="color: #0B3C5D; margin: 0;">🏗️ 올빌드 자재주문요청서 (로컬 보관용)</h2>
+                  <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">접수 일시: ${new Date().toLocaleString()}</p>
+                </div>
+                <h3>📌 상신 현장 및 신청 정보</h3>
+                <table class="info-table">
+                  <tr><th>현장명</th><td>${site}</td></tr>
+                  <tr><th>신청자</th><td>${worker}</td></tr>
+                  <tr><th>연락처 / 이메일</th><td>${tel} / ${mail}</td></tr>
+                  <tr><th>현장 배송주소</th><td>${addr}</td></tr>
+                </table>
+                <h3>📦 신청 자재 목록</h3>
+                <table class="item-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 8%; text-align: center;">번호</th>
+                      <th style="width: 17%;">제조사</th>
+                      <th style="width: 25%;">품명</th>
+                      <th style="width: 15%;">규격(전압)</th>
+                      <th style="width: 10%; text-align: center;">단위</th>
+                      <th style="width: 10%; text-align: right;">수량</th>
+                      <th>비고</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${itemRows}
+                  </tbody>
+                </table>
+                <div class="footer">
+                  <p>본 파일은 올빌드 MRO 시스템에 의해 로컬 문서 폴더로 자동 백업된 거래 사본입니다.</p>
+                  <p>© 2026 ALLBUILD PROCUREMENT SYSTEM</p>
+                </div>
+              </body>
+              </html>
+            `;
+
+            fs.writeFileSync(path.join(orderDir, filename), localHtml, 'utf8');
+            console.log(`[로컬 백업] 현장자재요청서가 성공적으로 로컬 PC에 백업되었습니다: ${filename}`);
+        } catch (localErr) {
+            console.warn('[로컬 백업 경고] 현장자재요청서 로컬 PC 저장 중 오류 발생:', localErr);
+        }
+
+        generateAllReports().catch(err => console.error('[보고서 생성 실패]:', err));
 
     } catch (err) {
         console.error('[API 처리 실패] 현장 주문 접수 중 오류:', err);
         return res.status(500).send(`<h2>[서버 오류] 주문 처리 중 에러가 발생했습니다: ${err.message || err}</h2>`);
     }
 
-    if (req.body.isFetch === 'true') {
-        return res.json({ success: true, count: parsedItems.length });
-    }
-
-    const redirectUrl = `http://localhost:5173/?source=direct-import&status=success&count=${parsedItems.length}`;
-    return res.redirect(redirectUrl);
+    // [수정 완료] AJAX fetch 요청에 대응하여 302 리디렉션 대신 표준 JSON 성공 응답을 반환합니다.
+    // 기존에 존재하지 않는 5173 포트로의 리디렉션 시도로 인해 발생하던 클라이언트 통신 오류(CORS 및 네트워크 에러)를 방지합니다.
+    return res.json({
+        success: true,
+        message: '현장 주문서가 안전하게 접수되었습니다.',
+        count: parsedItems.length
+    });
 });
 
 // --- [신규] 세무 증빙 및 영수증 1:1 매칭 API 구현 ---
@@ -992,124 +1104,62 @@ router.post('/email/send-estimate', async (req, res) => {
     }
 });
 
-// --- [신규] 쇼핑몰 계정 연동 및 관리 API ---
-const crypto = require('crypto');
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'allbuild-secret-key-32bytes-aes!'; // 정확히 32바이트 키 규격으로 수정함
-
-function encryptPassword(text) {
-    if (!text) return '';
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return iv.toString('hex') + ':' + encrypted;
-}
-
-// 필요시 외부에서 복호화해 크롤링 로그인 등에 활용 가능
-function decryptPassword(text) {
-    if (!text) return '';
-    try {
-        const parts = text.split(':');
-        const iv = Buffer.from(parts.shift(), 'hex');
-        const encryptedText = Buffer.from(parts.join(':'), 'hex');
-        const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
-        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-        return decrypted;
-    } catch (err) {
-        console.error('[복호화 실패] 비밀번호 복호화 오류:', err.message);
-        return '';
-    }
-}
-
-// 1. 쇼핑몰 목록 조회
-router.get('/malls', async (req, res) => {
-    try {
-        const { data, error } = await supabase
-            .from('mall_credentials')
-            .select('id, mall_name, login_id, status, last_checked_at, created_at')
-            .order('mall_name', { ascending: true });
-
-        if (error) throw error;
-        return res.json({ success: true, malls: data });
-    } catch (err) {
-        console.error('[쇼핑몰 목록 조회 실패]:', err);
-        return res.status(500).json({ error: `조회 실패: ${err.message}` });
-    }
-});
-
-// 2. 쇼핑몰 추가 또는 수정
-router.post('/malls', async (req, res) => {
-    const { mall_name, login_id, login_pw } = req.body;
-
-    if (!mall_name || !login_id || !login_pw) {
-        return res.status(400).json({ error: '쇼핑몰명, 아이디, 비밀번호를 모두 입력해 주세요.' });
+/**
+ * [POST] /api/estimate/save-local
+ * 견적서 HTML 문서를 지정된 로컬 PC 문서 폴더에 자동 백업 저장합니다.
+ */
+router.post('/estimate/save-local', async (req, res) => {
+    const { clientName, htmlContent } = req.body;
+    
+    if (!htmlContent) {
+        return res.status(400).json({ error: '견적서 내용(htmlContent)이 누락되었습니다.' });
     }
 
     try {
-        const encryptedPw = encryptPassword(login_pw);
+        const os = require('os');
+        const baseDir = path.join(os.homedir(), 'Documents/올빌드/올빌드거래자료');
+        const estimateDir = path.join(baseDir, '견적서');
         
-        // 기존에 동일 쇼핑몰명이 존재하는지 체크하여 분기 처리 (upsert)
-        const { data: existing } = await supabase
-            .from('mall_credentials')
-            .select('id')
-            .eq('mall_name', mall_name.trim())
-            .single();
-
-        let result;
-        if (existing) {
-            // 업데이트
-            const { data, error } = await supabase
-                .from('mall_credentials')
-                .update({
-                    login_id: login_id.trim(),
-                    login_pw_encrypted: encryptedPw,
-                    status: 'ACTIVE',
-                    last_checked_at: new Date(),
-                    updated_at: new Date()
-                })
-                .eq('id', existing.id)
-                .select();
-            if (error) throw error;
-            result = data;
-        } else {
-            // 인서트
-            const { data, error } = await supabase
-                .from('mall_credentials')
-                .insert([{
-                    mall_name: mall_name.trim(),
-                    login_id: login_id.trim(),
-                    login_pw_encrypted: encryptedPw,
-                    status: 'ACTIVE',
-                    last_checked_at: new Date()
-                }])
-                .select();
-            if (error) throw error;
-            result = data;
+        if (!fs.existsSync(estimateDir)) {
+            fs.mkdirSync(estimateDir, { recursive: true });
         }
 
-        return res.json({ success: true, message: '쇼핑몰 계정 정보가 안전하게(양방향 암호화) 저장되었습니다.', data: result });
-    } catch (err) {
-        console.error('[쇼핑몰 계정 저장 실패]:', err);
-        return res.status(500).json({ error: `저장 실패: ${err.message}` });
-    }
-});
+        const dateStr = new Date().toISOString().split('T')[0];
+        const timeStr = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+        const cleanClientName = (clientName || '귀하').trim().replace(/[\/\\:\*\?"<>\|]/g, '_');
+        const filename = `올빌드_견적서_${cleanClientName}_${dateStr}_${timeStr}.html`;
 
-// 3. 쇼핑몰 삭제
-router.delete('/malls/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-        const { error } = await supabase
-            .from('mall_credentials')
-            .delete()
-            .eq('id', id);
+        const fullHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>올빌드 견적서 - 로컬 자동 보관 사본</title>
+            <style>
+              body { font-family: sans-serif; padding: 20px; background-color: #f3f4f6; }
+              .print-area { background: white; padding: 40px; max-width: 800px; margin: 0 auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px; }
+            </style>
+          </head>
+          <body>
+            <div class="print-area">
+              ${htmlContent}
+            </div>
+          </body>
+          </html>
+        `;
 
-        if (error) throw error;
-        return res.json({ success: true, message: '쇼핑몰 연동이 해제(삭제)되었습니다.' });
-    } catch (err) {
-        console.error('[쇼핑몰 계정 삭제 실패]:', err);
-        return res.status(500).json({ error: `삭제 실패: ${err.message}` });
+        fs.writeFileSync(path.join(estimateDir, filename), fullHtml, 'utf8');
+        console.log(`[로컬 백업] 견적서가 성공적으로 로컬 PC에 백업되었습니다: ${filename}`);
+
+        return res.json({ 
+            success: true, 
+            message: `견적서가 로컬 PC 폴더에 안전하게 보관되었습니다.\n(파일명: ${filename})` 
+        });
+    } catch (error) {
+        console.error('[API 에러] 견적서 로컬 저장 오류:', error);
+        return res.status(500).json({ error: `견적서를 로컬 PC에 보관하는 중 오류가 발생했습니다: ${error.message}` });
     }
 });
 
 module.exports = router;
+

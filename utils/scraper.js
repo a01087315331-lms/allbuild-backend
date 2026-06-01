@@ -34,8 +34,8 @@ async function fetchNaverMall(keyword, searchWords, targetMall) {
     const clientId = process.env.NAVER_CLIENT_ID;
     const clientSecret = process.env.NAVER_CLIENT_SECRET;
     
-    // 네이버 쇼핑 OpenAPI 호출 (비교 데이터를 최대화하기 위해 최대치인 100개 노출 요청)
-    const url = `https://openapi.naver.com/v1/search/shop.json?query=${encodeURIComponent(keyword)}&display=100`;
+    // 네이버 쇼핑 OpenAPI 호출 (충분한 비교 데이터를 위해 60개 노출 요청)
+    const url = `https://openapi.naver.com/v1/search/shop.json?query=${encodeURIComponent(keyword)}&display=60`;
     
     try {
         const response = await fetch(url, {
@@ -184,27 +184,6 @@ async function scrapeProducts(keyword) {
     console.log(`[복합 6대 쇼핑몰 스크래퍼] '${keyword}' 검색 시작...`);
     const searchWords = keyword.toLowerCase().split(' ').filter(word => word.trim().length > 0);
     
-    // 5대 쇼핑몰(네이버 API 기반)은 브라우저 실행이 필요 없으므로 우선 안전하게 병렬 호출합니다.
-    let naver = [], coupang = [], st11 = [], gmarket = [], auction = [];
-    try {
-        const results = await Promise.all([
-            fetchNaverMall(keyword, searchWords, '네이버'),
-            fetchNaverMall(keyword, searchWords, '쿠팡'),
-            fetchNaverMall(keyword, searchWords, '11번가'),
-            fetchNaverMall(keyword, searchWords, 'G마켓'),
-            fetchNaverMall(keyword, searchWords, '옥션')
-        ]);
-        naver = results[0];
-        coupang = results[1];
-        st11 = results[2];
-        gmarket = results[3];
-        auction = results[4];
-    } catch (e) {
-        console.error("네이버 API 쇼핑몰 수집 중 에러:", e);
-    }
-
-    // 나비MRO는 브라우저(Puppeteer)가 필요하므로 실패 시 예외가 전체 검색을 막지 않도록 개별 격리 처리합니다.
-    let navimro = [];
     let browser;
     try {
         browser = await puppeteer.launch({ 
@@ -213,38 +192,42 @@ async function scrapeProducts(keyword) {
         });
         const pageNavimro = await browser.newPage();
         await pageNavimro.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        navimro = await scrapeNavimro(pageNavimro, keyword, searchWords);
-    } catch(e) {
-        console.warn("[나비엠알오 수집 차단 우회] 서버 내 크롬 브라우저 미설치 등으로 나비MRO 수집은 제외하고 진행합니다.");
-    } finally {
-        if(browser) {
-            try {
-                await browser.close();
-            } catch(closeErr) {
-                console.error("브라우저 종료 에러:", closeErr);
+
+        // 6대 쇼핑몰 병렬 수집 (네이버 API 5개 + 나비MRO Puppeteer 1개)
+        const [naver, coupang, st11, gmarket, auction, navimro] = await Promise.all([
+            fetchNaverMall(keyword, searchWords, '네이버'),
+            fetchNaverMall(keyword, searchWords, '쿠팡'),
+            fetchNaverMall(keyword, searchWords, '11번가'),
+            fetchNaverMall(keyword, searchWords, 'G마켓'),
+            fetchNaverMall(keyword, searchWords, '옥션'),       // [신규] 옥션 추가
+            scrapeNavimro(pageNavimro, keyword, searchWords) // MRO 전용 쇼핑몰
+        ]);
+
+        // 검색된 결과 개수가 2개 미만인 경우 더미 상품으로 채워 각 몰별 딱 2개씩 고정 반환
+        const formatResults = (items, mall) => {
+            const result = [...items].slice(0, 2);
+            while (result.length < 2) {
+                result.push(createDummyProduct(keyword, mall));
             }
-        }
+            return result;
+        };
+
+        const finalResults = [
+            ...formatResults(naver, '네이버'),
+            ...formatResults(coupang, '쿠팡'),
+            ...formatResults(st11, '11번가'),
+            ...formatResults(gmarket, 'G마켓'),
+            ...formatResults(auction, '옥션'),       // [신규] 옥션 추가
+            ...formatResults(navimro, '나비엠알오')
+        ];
+
+        return finalResults;
+    } catch(e) {
+        console.error("전체 스크래핑 에러:", e);
+        return [];
+    } finally {
+        if(browser) await browser.close();
     }
-
-    // 검색된 결과 개수가 2개 미만인 경우 더미 상품으로 채워 각 몰별 딱 2개씩 고정 반환
-    const formatResults = (items, mall) => {
-        const result = [...items].slice(0, 2);
-        while (result.length < 2) {
-            result.push(createDummyProduct(keyword, mall));
-        }
-        return result;
-    };
-
-    const finalResults = [
-        ...formatResults(naver, '네이버'),
-        ...formatResults(coupang, '쿠팡'),
-        ...formatResults(st11, '11번가'),
-        ...formatResults(gmarket, 'G마켓'),
-        ...formatResults(auction, '옥션'),       // [신규] 옥션 추가
-        ...formatResults(navimro, '나비엠알오')
-    ];
-
-    return finalResults;
 }
 
 module.exports = {
