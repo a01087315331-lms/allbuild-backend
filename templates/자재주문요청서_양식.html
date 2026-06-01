@@ -9,9 +9,9 @@
         (function() {
             if (window.location.protocol === 'file:') {
                 // 로컬 서버의 헬스체크 API를 호출하여 서버가 가동 중인지 확인합니다.
-                const checkUrl = 'http://localhost:5000/api/health';
+                const checkUrl = 'https://allbuild-backend.onrender.com/api/health';
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 1000); // 1초 타임아웃
+                const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5초 타임아웃
                 
                 fetch(checkUrl, { signal: controller.signal })
                     .then(response => response.json())
@@ -19,7 +19,7 @@
                         clearTimeout(timeoutId);
                         if (data && data.status === 'ok') {
                             // 로컬 서버가 가동 중이므로, 해당 서버 도메인의 템플릿 정적 서빙 경로로 주소를 강제 전환합니다.
-                            window.location.replace('http://localhost:5000/templates/자재주문요청서_양식.html');
+                            window.location.replace('https://allbuild-backend.onrender.com/templates/자재주문요청서_양식.html?v=' + Date.now());
                         }
                     })
                     .catch(error => {
@@ -411,14 +411,14 @@
             maxSuggestItems : 5
         }).embed(element_frame);
     }
-
     // 폼 최종 제출(Submit) 시 입력된 자재 데이터 정형화 및 백엔드 전송 데이터 적재
     document.getElementById('orderForm').addEventListener('submit', function(e) {
         const form = e.target;
         
-        // [방어 코드] 로컬 파일(file:///)로 열었을 경우 API Host 주소를 로컬 개발 서버 주소(http://localhost:5000)로 자동 설정합니다.
+        // [방어 코드] 로컬 파일(file:///)로 열었을 경우 API Host 주소를 실서버 주소(https://allbuild-backend.onrender.com)로 자동 설정합니다.
         if (form.action.includes('%%API_HOST%%')) {
-            form.action = form.action.replace('%%API_HOST%%', 'http://localhost:5000');
+            const apiHost = window.location.protocol === 'file:' ? 'https://allbuild-backend.onrender.com' : window.location.origin;
+            form.action = form.action.replace('%%API_HOST%%', apiHost);
         }
 
         // 전체 25개 입력행 중에서 실제로 사용자가 작성한 항목만 수집합니다.

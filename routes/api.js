@@ -681,7 +681,7 @@ router.get('/reports', async (req, res) => {
  * 현장용 자재주문요청서 HTML 양식 파일을 다운로드합니다.
  */
 router.get('/download-template', (req, res) => {
-    const templatePath = path.join(__dirname, '../templates/order_template.html');
+    const templatePath = path.join(__dirname, '../templates/자재주문요청서_양식.html');
     if (!fs.existsSync(templatePath)) {
         return res.status(404).json({ error: '자재주문요청서 양식 템플릿 파일을 찾을 수 없습니다.' });
     }
