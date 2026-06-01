@@ -1,11 +1,35 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+    <script>
+
+    function addRow() {
+        const tbody = document.getElementById('page1Body');
+        const rowCount = tbody.children.length;
+        const newRowIndex = rowCount + 1;
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${newRowIndex}</td>
+            <td><input type="text" class="material-name" style="width:92%;"></td>
+            <td><input type="text" class="material-spec" style="width:94%;"></td>
+            <td><input type="text" class="material-unit" style="width:85%; text-align:center;"></td>
+            <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
+            <td><input type="text" class="material-remark" style="width:90%;"></td>
+        `;
+        tbody.appendChild(tr);
+    }
+    
+        window.onerror = function(msg, url, line) {
+            alert("전역 자바스크립트 오류가 발생했습니다!\n메시지: " + msg + "\n줄 번호: " + line);
+            return false;
+        };
+    </script>
     <meta charset="UTF-8">
     <title>자재 주문요청서 작성 프로그램 (결재란 포함)</title>
 
     <!-- [API 로드] 카카오(Daum) 우편번호 검색 서비스 라이브러리를 추가합니다 -->
-    <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+    
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
         .app-container { max-width: 900px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
@@ -93,40 +117,38 @@
     
     <!-- 본사 전송을 위해 전체 입력 필드를 감싸는 form 태그를 추가합니다. -->
     <!-- %%API_HOST%%는 서버에서 동적 서빙 시 본사 서버 주소로 치환되나, 스크립트 단에서 로컬 실행 시를 대비해 방어 코드를 구현합니다. -->
-    <form id="orderForm" action="https://allbuild-backend.onrender.com/api/parser/submit-form" method="POST" enctype="multipart/form-data">
+    <form id="orderForm" action="/api/parser/submit-form" method="POST" enctype="multipart/form-data">
         <!-- 서버 전송을 위한 자바스크립트 가공 데이터 보관용 hidden 필드들 -->
         <input type="hidden" name="items" id="itemsInput">
         <input type="hidden" name="address" id="addressInput">
         <input type="hidden" name="site_name" id="siteNameHidden">
         <input type="hidden" name="requester" id="requesterHidden">
         <input type="hidden" name="phone" id="phoneHidden">
+        <input type="hidden" name="email" id="emailHidden">
 
         <h2>■ 현장 및 청구 정보 (PAGE 1)</h2>
-        <div class="grid-3" style="grid-template-columns: 2fr 1fr 1fr 2fr; gap: 15px;">
+        <div class="grid-3">
             <div class="form-group"><label>현장명 <span style="color:red;">*</span></label><input type="text" id="siteNameInput" oninput="syncSiteName()" required placeholder="예: 삼전동 신축공사"></div>
             <div class="form-group"><label>청구부서</label><select id="deptSelect"><option>공사팀</option><option>공무팀</option><option>안전팀</option><option>관리팀</option></select></div>
             <div class="form-group"><label>청구자 <span style="color:red;">*</span></label><input type="text" id="requesterInput" required placeholder="홍길동 과장"></div>
-            <div class="form-group"><label>신청자 이메일 <span style="color:red;">*</span></label><input type="email" id="requesterEmailInput" required placeholder="example@naver.com"></div>
         </div>
+
         <h2>■ 📍 현장 상세 주소 및 하차 위치</h2>
-        <!-- [개선] 팝업 연동 방식의 우편번호 및 기본/상세주소 레이아웃 구축 -->
+                <!-- [개선] 직접 입력 방식의 납품 주소 레이아웃 구축 -->
         <div class="form-group">
-            <label>납품 주소 <span style="color:red;">*</span></label>
-            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                <input type="text" id="zipcode" readonly required placeholder="우편번호" style="width: 120px; background-color: #f1f5f9; text-align: center; font-weight: bold;">
-                <button type="button" onclick="execDaumPostcode()" style="background-color: #2563eb; color: white; border: none; border-radius: 4px; padding: 0 15px; font-weight: bold; cursor: pointer; font-size: 0.85rem;">🔍 우편번호 찾기</button>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                <input type="text" id="basic_address" readonly required placeholder="기본 주소 (우편번호 검색 시 자동 입력)" style="background-color: #f1f5f9;">
-                <input type="text" id="detail_address" required placeholder="상세 주소 입력 (예: 101동 202호)">
+            <label>납품 주소 (직접 입력) <span style="color:red;">*</span></label>
+            <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                <input type="text" id="full_address" required placeholder="납품받을 상세 주소를 정확히 입력해 주세요 (예: 서울시 송파구 삼전동 123-4번지 101동 현장 야적장)">
             </div>
         </div>
         
-        <div class="grid-3" style="grid-template-columns: 1fr 1fr 1fr; margin-top: 10px;">
+        <div class="grid-3" style="grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-top: 10px;">
             <div class="form-group" style="grid-column: span 1;"><label>현장 내 상세 하차지</label><input type="text" id="unloading_place" placeholder="예: 105동 측면 야적장"></div>
             <div class="form-group" style="grid-column: span 1;"><label>현장 안내 (인수자)</label><input type="text" id="receiver_info" placeholder="김기사 (010-1234-5678)"></div>
             <!-- [신규] 본사 데이터베이스 연동과 정보 기록을 위해 신청자 연락처 입력란 추가 -->
             <div class="form-group" style="grid-column: span 1;"><label>신청자 연락처 (전화번호) <span style="color:red;">*</span></label><input type="tel" id="requester_phone" required placeholder="예: 010-1234-5678"></div>
+            <!-- [신규] 자재주문서와 견적서 이메일 연동을 위해 신청자 이메일 주소 입력란 추가 -->
+            <div class="form-group" style="grid-column: span 1;"><label>신청자 이메일 주소 <span style="color:red;">*</span></label><input type="email" id="requesterEmailInput" required placeholder="예: example@gmail.com"></div>
         </div>
 
         <h2>■ 🚚 현장 진입 및 배송 조건</h2>
@@ -145,7 +167,7 @@
             </div>
         </div>
 
-        <h2>■ 자재 주문 명세 (1~10행)</h2>
+        <h2>■ 자재 주문 명세</h2>
         <table class="main-table">
             <thead>
                 <tr>
@@ -157,8 +179,93 @@
                     <th style="width: 22%;">비고</th>
                 </tr>
             </thead>
-            <tbody id="page1Body"></tbody>
+            <tbody id="page1Body">
+                <tr>
+                    <td>1</td>
+                    <td><input type="text" class="material-name" style="width:92%;" placeholder="예: 철근"></td>
+                    <td><input type="text" class="material-spec" style="width:94%;" placeholder="예: HD10, L10.0m"></td>
+                    <td><input type="text" class="material-unit" style="width:85%; text-align:center;" placeholder="톤"></td>
+                    <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
+                    <td><input type="text" class="material-remark" style="width:90%;" placeholder="101동 기초"></td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td><input type="text" class="material-name" style="width:92%;" placeholder=""></td>
+                    <td><input type="text" class="material-spec" style="width:94%;" placeholder=""></td>
+                    <td><input type="text" class="material-unit" style="width:85%; text-align:center;" placeholder=""></td>
+                    <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
+                    <td><input type="text" class="material-remark" style="width:90%;" placeholder=""></td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td><input type="text" class="material-name" style="width:92%;" placeholder=""></td>
+                    <td><input type="text" class="material-spec" style="width:94%;" placeholder=""></td>
+                    <td><input type="text" class="material-unit" style="width:85%; text-align:center;" placeholder=""></td>
+                    <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
+                    <td><input type="text" class="material-remark" style="width:90%;" placeholder=""></td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td><input type="text" class="material-name" style="width:92%;" placeholder=""></td>
+                    <td><input type="text" class="material-spec" style="width:94%;" placeholder=""></td>
+                    <td><input type="text" class="material-unit" style="width:85%; text-align:center;" placeholder=""></td>
+                    <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
+                    <td><input type="text" class="material-remark" style="width:90%;" placeholder=""></td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td><input type="text" class="material-name" style="width:92%;" placeholder=""></td>
+                    <td><input type="text" class="material-spec" style="width:94%;" placeholder=""></td>
+                    <td><input type="text" class="material-unit" style="width:85%; text-align:center;" placeholder=""></td>
+                    <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
+                    <td><input type="text" class="material-remark" style="width:90%;" placeholder=""></td>
+                </tr>
+                <tr>
+                    <td>6</td>
+                    <td><input type="text" class="material-name" style="width:92%;" placeholder=""></td>
+                    <td><input type="text" class="material-spec" style="width:94%;" placeholder=""></td>
+                    <td><input type="text" class="material-unit" style="width:85%; text-align:center;" placeholder=""></td>
+                    <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
+                    <td><input type="text" class="material-remark" style="width:90%;" placeholder=""></td>
+                </tr>
+                <tr>
+                    <td>7</td>
+                    <td><input type="text" class="material-name" style="width:92%;" placeholder=""></td>
+                    <td><input type="text" class="material-spec" style="width:94%;" placeholder=""></td>
+                    <td><input type="text" class="material-unit" style="width:85%; text-align:center;" placeholder=""></td>
+                    <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
+                    <td><input type="text" class="material-remark" style="width:90%;" placeholder=""></td>
+                </tr>
+                <tr>
+                    <td>8</td>
+                    <td><input type="text" class="material-name" style="width:92%;" placeholder=""></td>
+                    <td><input type="text" class="material-spec" style="width:94%;" placeholder=""></td>
+                    <td><input type="text" class="material-unit" style="width:85%; text-align:center;" placeholder=""></td>
+                    <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
+                    <td><input type="text" class="material-remark" style="width:90%;" placeholder=""></td>
+                </tr>
+                <tr>
+                    <td>9</td>
+                    <td><input type="text" class="material-name" style="width:92%;" placeholder=""></td>
+                    <td><input type="text" class="material-spec" style="width:94%;" placeholder=""></td>
+                    <td><input type="text" class="material-unit" style="width:85%; text-align:center;" placeholder=""></td>
+                    <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
+                    <td><input type="text" class="material-remark" style="width:90%;" placeholder=""></td>
+                </tr>
+                <tr>
+                    <td>10</td>
+                    <td><input type="text" class="material-name" style="width:92%;" placeholder=""></td>
+                    <td><input type="text" class="material-spec" style="width:94%;" placeholder=""></td>
+                    <td><input type="text" class="material-unit" style="width:85%; text-align:center;" placeholder=""></td>
+                    <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
+                    <td><input type="text" class="material-remark" style="width:90%;" placeholder=""></td>
+                </tr>
+            </tbody>
         </table>
+        <div style="text-align: right; margin-top: 5px; margin-bottom: 20px;">
+            <button type="button" class="btn" onclick="addRow()" style="background-color: #10b981; font-size: 0.85rem; padding: 6px 12px;">➕ 입력 행 추가하기</button>
+        </div>
+
 
         <h3>📸 1페이지 자재 첨부 사진 (A4 용지 하단 배치)</h3>
         <div class="photo-section">
@@ -169,156 +276,168 @@
         </div>
 
 
-        <!-- ==================== [PAGE 2: 11~25번 행] ==================== -->
-        <div class="page-break"></div>
-        <div class="header-area" style="margin-top:10px;">
-            <h1>🏗️ 자재 주문요청서 (현장용)</h1>
-            <!-- 2페이지 결재란 표 -->
-            <table class="sign-table">
-                <thead>
-                    <tr>
-                        <th rowspan="2" style="width:20px; background-color:#f1f5f9;">결<br>재</th>
-                        <th>담당</th>
-                        <th>공구장</th>
-                        <th>소장</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td></td>
-                        <td>/</td>
-                        <td>/</td>
-                        <td>/</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <div style="border-bottom: 3px solid #1e3a8a; margin-top:-10px; margin-bottom:15px;"></div>
         
-        <div class="mini-header">
-            <div>현장명: <span class="mirrorSiteNameClass">[ 현장명을 입력하세요 ]</span></div>
-            <div>구분: 자재 주문 명세 연장분 (PAGE 2)</div>
-        </div>
 
-        <h2>■ 자재 주문 명세 (11~25행)</h2>
-        <table class="main-table">
-            <thead>
-                <tr>
-                    <th style="width: 8%;">순번</th>
-                    <th style="width: 22%;">품명</th>
-                    <th style="width: 28%;">정식규격</th>
-                    <th style="width: 10%;">단위</th>
-                    <th style="width: 10%;">수량</th>
-                    <th style="width: 22%;">비고</th>
-                </tr>
-            </thead>
-            <tbody id="page2Body"></tbody>
-        </table>
-
-        <h3>📸 2페이지 자재 첨부 사진</h3>
-        <div class="photo-section">
-            <label for="imgLoader2" class="file-label">📸 2페이지 사진 등록</label>
-            <!-- [개선] 백엔드 multipart 데이터 전송에 바인딩되도록 name="photoFiles" 속성을 매핑합니다. -->
-            <input type="file" id="imgLoader2" name="photoFiles" accept="image/*" multiple style="display:none;" onchange="handleImageUpload(this, 'preview2')">
-            <div id="preview2" class="image-preview-zone"></div>
+        
         </div>
 
         <div class="btn-area" style="display: flex; justify-content: center; gap: 15px;">
             <!-- 기존 인쇄 기능에 더해 본사 서버로 즉각적인 실시간 주문을 전송하는 버튼을 유려하게 배치합니다. -->
             <button type="button" class="btn" onclick="window.print()" style="background-color: #475569;">📄 작성완료 및 인쇄 / PDF 저장</button>
-            <button type="submit" class="btn" style="background-color: #2563eb;">🚀 올빌드 본사로 주문 요청하기</button>
+            <button type="button" id="realSubmitBtn" class="btn" style="background-color: #2563eb;" onclick="submitOrder()">🚀 올빌드 본사로 주문 최종전송</button>
         </div>
     </form>
 </div>
 
-<!-- [신규] 카카오 우편번호 검색기 모달 레이어 (로컬 file:/// 실행 시 크로스 도메인 오류 완벽 우회) -->
-<div id="postcodeLayer" style="display: none; position: fixed; inset: 0; z-index: 10000; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 20px;">
-    <div style="background-color: white; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); width: 100%; max-width: 500px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid #e2e8f0; animation: modalFadeIn 0.3s ease-out;">
-        <!-- 모달 창 헤더 -->
-        <div style="background: linear-gradient(135deg, #1e3a8a, #0f172a); color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 0.95rem;">
-            <span style="display: flex; align-items: center; gap: 8px;">📍 주소 검색 (우편번호 찾기)</span>
-            <button type="button" onclick="closePostcodeLayer()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1; padding: 0;">&times;</button>
-        </div>
-        <!-- 우편번호 서비스 스크립트가 임베딩될 iframe 컨테이너 -->
-        <div id="postcodeFrame" style="width: 100%; height: 450px; background-color: #f8fafc;"></div>
-    </div>
-</div>
 
-<style>
-    @keyframes modalFadeIn {
-        from { opacity: 0; transform: scale(0.95); }
-        to { opacity: 1; transform: scale(1); }
-    }
-</style>
 
 <script>
-    // 1페이지용 10개 행 생성 (1~10번)
-    const p1Body = document.getElementById('page1Body');
-    for (let i = 1; i <= 10; i++) {
-        let row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${i}</td>
-            <td><input type="text" class="material-name" style="width:92%;" placeholder="예: 철근"></td>
-            <td><input type="text" class="material-spec" style="width:94%;" placeholder="예: HD10, L10.0m"></td>
-            <td><input type="text" class="material-unit" style="width:85%; text-align:center;" placeholder="톤"></td>
-            <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
-            <td><input type="text" class="material-remark" style="width:90%;" placeholder="101동 기초"></td>
-        `;
-        p1Body.appendChild(row);
-    }
-
-    // 2페이지용 15개 행 생성 (11~25번)
-    const p2Body = document.getElementById('page2Body');
-    for (let i = 11; i <= 25; i++) {
-        let row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${i}</td>
-            <td><input type="text" class="material-name" style="width:92%;"></td>
-            <td><input type="text" class="material-spec" style="width:94%;"></td>
-            <td><input type="text" class="material-unit" style="width:85%; text-align:center;"></td>
-            <td><input type="number" step="any" class="material-qty" style="width:85%; text-align:right;"></td>
-            <td><input type="text" class="material-remark" style="width:90%;"></td>
-        `;
-        p2Body.appendChild(row);
-    }
-
+    // [압축 보관소] 사용자가 등록하고 압축을 완료한 이미지 Blob 파일들을 저장하는 전역 메모리 배열입니다.
+    var uploadedCompressedFiles = [];
+    
     // 현장명 입력 시 페이지의 현장명 정보 자동 동기화
     function syncSiteName() {
-        const inputVal = document.getElementById('siteNameInput').value;
-        const defaultText = "[ 현장명을 입력하세요 ]";
-        const targets = document.getElementsByClassName('mirrorSiteNameClass');
-        for (let target of targets) {
-            target.innerText = inputVal ? inputVal + " 현장" : defaultText;
+        var inputVal = document.getElementById('siteNameInput').value;
+        var defaultText = "[ 현장명을 입력하세요 ]";
+        var targets = document.getElementsByClassName('mirrorSiteNameClass');
+        for (var i = 0; i < targets.length; i++) {
+            targets[i].innerText = inputVal ? inputVal + " 현장" : defaultText;
         }
     }
 
-    // 파일 로컬 읽기 및 업로드 미리보기 관리용 객체
-    function handleImageUpload(inputElement, previewTargetId) {
-        const files = inputElement.files;
-        const previewZone = document.getElementById(previewTargetId);
-        
-        for(let i=0; i<files.length; i++) {
-            const file = files[i];
-            const reader = new FileReader();
-            
-            reader.onload = function(event) {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'img-wrapper';
-                
-                const img = document.createElement('img');
-                img.src = event.target.result;
-                
-                const delBtn = document.createElement('button');
-                delBtn.className = 'del-btn';
-                delBtn.innerText = '삭제';
-                delBtn.onclick = function() { wrapper.remove(); };
-                
-                wrapper.appendChild(img);
-                wrapper.appendChild(delBtn);
-                previewZone.appendChild(wrapper);
+    // [교육용 주소] 고화질 원본 이미지를 받아 가로세로 최대 800px로 리사이징하고, JPEG 품질 0.5로 대폭 압축하는 유틸리티 함수
+    function compressImageFile(file, callback) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var img = new Image();
+            img.onload = function() {
+                var canvas = document.createElement('canvas');
+                var maxDimension = 600; // 최대 해상도를 600px로 낮춰 전송 속도를 대폭 개선합니다.
+                var width = img.width;
+                var height = img.height;
+
+                // 종횡비를 유지하면서 크기를 조정합니다.
+                if (width > height) {
+                    if (width > maxDimension) {
+                        height = Math.round((height * maxDimension) / width);
+                        width = maxDimension;
+                    }
+                } else {
+                    if (height > maxDimension) {
+                        width = Math.round((width * maxDimension) / height);
+                        height = maxDimension;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // 화질을 30% 수준으로 강력 압축하여 장당 수십 KB 크기로 초경량 전송을 보장합니다.
+                if (canvas.toBlob) {
+                    canvas.toBlob(function(blob) {
+                        callback(blob);
+                    }, 'image/jpeg', 0.3);
+                } else {
+                    // 구형 브라우저 지원용 폴백 (dataURL 변환 후 Blob 변환)
+                    var dataUrl = canvas.toDataURL('image/jpeg', 0.3);
+                    var blob = dataURLToBlob(dataUrl);
+                    callback(blob);
+                }
             };
-            reader.readAsDataURL(file);
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // dataURL을 Blob 객체로 변환해주는 헬퍼 함수
+    function dataURLToBlob(dataUrl) {
+        var parts = dataUrl.split(',');
+        var mime = parts[0].match(/:(.*?);/)[1];
+        var bstr = atob(parts[1]);
+        var n = bstr.length;
+        var u8arr = new Uint8Array(n);
+        while(n--) {
+            u8arr[n] = bstr.charCodeAt(n);
         }
+        return new Blob([u8arr], {type:mime});
+    }
+
+    // 파일 로컬 읽기 및 업로드 미리보기 관리 함수 (압축 로직 탑재)
+    function handleImageUpload(inputElement, previewTargetId) {
+        var files = inputElement.files;
+        var previewZone = document.getElementById(previewTargetId);
+        
+        // 사용자가 파일을 선택한 뒤 input 필드를 초기화하여 동일 파일을 다시 선택해도 이벤트가 발생하도록 합니다.
+        var fileList = Array.prototype.slice.call(files);
+        inputElement.value = ''; 
+
+        fileList.forEach(function(file) {
+            if (!file.type.match('image.*')) {
+                alert('이미지 파일만 등록할 수 있습니다.');
+                return;
+            }
+
+            // 고유한 파일 임시 식별 ID를 타임스탬프 기반으로 생성합니다.
+            var tempFileId = 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+            // 1. 먼저 사용자 화면에 압축 대기 중인 상태를 표시합니다.
+            var wrapper = document.createElement('div');
+            wrapper.className = 'img-wrapper';
+            wrapper.id = tempFileId;
+            wrapper.style.opacity = '0.5'; // 압축 중일 때는 투명도를 줘서 처리 중임을 알립니다.
+
+            var loadingText = document.createElement('div');
+            loadingText.className = 'loading-indicator';
+            loadingText.innerText = '압축 중...';
+            loadingText.style.cssText = 'position: absolute; top: 40%; left: 0; right: 0; text-align: center; color: #2563eb; font-weight: bold; font-size: 0.85rem;';
+            wrapper.appendChild(loadingText);
+            previewZone.appendChild(wrapper);
+
+            // 2. 백그라운드 이미지 압축을 수행합니다.
+            compressImageFile(file, function(compressedBlob) {
+                // 압축 완료된 Blob에 원본 파일명을 붙여서 전송용으로 포장합니다.
+                compressedBlob.name = file.name;
+                
+                // 전역 압축 파일 관리 배열에 저장하고, DOM 래퍼 객체에도 식별 정보를 넣습니다.
+                uploadedCompressedFiles.push({
+                    id: tempFileId,
+                    blob: compressedBlob
+                });
+
+                // 화면에 압축된 결과물 미리보기를 출력하고 로딩 상태를 해제합니다.
+                var reader = new FileReader();
+                reader.onload = function(event) {
+                    // 기존 로딩 문구 제거
+                    if (wrapper.contains(loadingText)) {
+                        wrapper.removeChild(loadingText);
+                    }
+                    wrapper.style.opacity = '1.0'; // 로딩 투명도 제거
+
+                    var img = document.createElement('img');
+                    img.src = event.target.result;
+                    
+                    var delBtn = document.createElement('button');
+                    delBtn.className = 'del-btn';
+                    delBtn.innerText = '삭제';
+                    delBtn.type = 'button'; // 기본 submit 방지
+                    delBtn.onclick = function() {
+                        // 전역 관리 리스트에서 해당 이미지를 제거합니다.
+                        uploadedCompressedFiles = uploadedCompressedFiles.filter(function(item) {
+                            return item.id !== tempFileId;
+                        });
+                        // 화면에서 미리보기 상자를 삭제합니다.
+                        wrapper.parentNode.removeChild(wrapper);
+                    };
+                    
+                    wrapper.appendChild(img);
+                    wrapper.appendChild(delBtn);
+                };
+                reader.readAsDataURL(compressedBlob);
+            });
+        });
     }
 
     // [UX 개선] 입력 폼 내에서 엔터 키를 쳤을 때 의도치 않게 인쇄되거나 폼 전송이 튕겨버리는 것을 막습니다.
@@ -329,181 +448,118 @@
         }
     });
 
-    // 카카오 우편번호 모달 레이어 컨트롤 영역
-    const element_layer = document.getElementById('postcodeLayer');
-    const element_frame = document.getElementById('postcodeFrame');
-
-    // 우편번호 모달 닫기
-    function closePostcodeLayer() {
-        element_layer.style.display = 'none';
-    }
-
-    // 우편번호 모달 열기 및 임베딩 처리
-    function execDaumPostcode() {
-        element_layer.style.display = 'flex';
-
-        new daum.Postcode({
-            oncomplete: function(data) {
-                var addr = '';
-                var extraAddr = '';
-
-                if (data.userSelectedType === 'R') { // 도로명 주소
-                    addr = data.roadAddress;
-                } else { // 지번 주소
-                    addr = data.jibunAddress;
-                }
-
-                if(data.userSelectedType === 'R'){
-                    if(data.bname !== '' && /[동|로|가]$/g.test(data.bname)){
-                        extraAddr += data.bname;
-                    }
-                    if(data.buildingName !== '' && data.apartment === 'Y'){
-                        extraAddr += (extraAddr !== '' ? ', ' + data.buildingName : data.buildingName);
-                    }
-                    if(extraAddr !== ''){
-                        extraAddr = ' (' + extraAddr + ')';
-                    }
-                    addr += extraAddr;
-                }
-
-                // 입력 요소에 대입
-                document.getElementById('zipcode').value = data.zonecode;
-                document.getElementById('basic_address').value = addr;
-                
-                closePostcodeLayer();
-                
-                // 기본주소 입력 후 즉시 상세주소로 커서 focus 포인터 자동 이동
-                document.getElementById('detail_address').focus();
-            },
-            width : '100%',
-            height : '100%',
-            maxSuggestItems : 5
-        }).embed(element_frame);
-    }
-    // [UX 개선] 폼 최종 제출(Submit) 시 페이지 리다이렉트 없이 Fetch API(비동기)로 안전하게 본사 전송을 수행합니다.
-    document.getElementById('orderForm').addEventListener('submit', async function(e) {
-        e.preventDefault(); // 기본 동기 제출 방지
-        const form = e.target;
-        const submitBtn = form.querySelector('button[type="submit"]');
-        const originalBtnText = submitBtn ? submitBtn.innerHTML : '🚀 올빌드 본사로 주문 요청하기';
-        
-        // [방어 코드] 로컬 파일(file:///) 또는 템플릿 환경에 따른 본사 API 호스트 결정
-        let apiHost = 'https://allbuild-backend.onrender.com';
-
-        // 전체 25개 입력행 중에서 실제로 사용자가 작성한 항목만 수집합니다.
-        const items = [];
-        const rows = document.querySelectorAll('#page1Body tr, #page2Body tr');
-        let hasValidItem = false;
-
-        rows.forEach(row => {
-            const nameInput = row.querySelector('.material-name');
-            const specInput = row.querySelector('.material-spec');
-            const unitInput = row.querySelector('.material-unit');
-            const qtyInput = row.querySelector('.material-qty');
-            const remarkInput = row.querySelector('.material-remark');
-
-            if (nameInput.value.trim() && qtyInput.value) {
-                hasValidItem = true;
-                const qty = parseFloat(qtyInput.value) || 1;
-                const remark = remarkInput.value.trim();
-                
-                items.push({
-                    mall_name: '현장직접입력',
-                    product_name: nameInput.value.trim() + (remark ? ` [비고: ${remark}]` : ''),
-                    price: 0,
-                    tax: 0,
-                    shipping_fee: 0,
-                    spec: specInput.value.trim() || '일반규격',
-                    unit: unitInput.value.trim() || '개',
-                    qty: qty
-                });
-            }
-        });
-
-        if (!hasValidItem) {
-            alert('최소 한 개 이상의 자재 품명과 수량을 정확하게 입력해 주세요.');
-            return;
-        }
-
-        // 주소 데이터 가공 및 수집
-        const zip = document.getElementById('zipcode').value;
-        const basic = document.getElementById('basic_address').value;
-        const detail = document.getElementById('detail_address').value;
-        const unloading = document.getElementById('unloading_place').value.trim();
-        const receiver = document.getElementById('receiver_info').value.trim();
-
-        if (!zip || !basic) {
-            alert('배송을 위해 [우편번호 찾기]를 통해 주소를 입력해 주셔야 합니다.');
-            return;
-        }
-
-        // 상세 하차지 및 인수자 안내도 주소 필드에 합쳐서 안전하게 보존합니다.
-        let finalAddress = `(${zip}) ${basic} ${detail.trim()}`;
-        if (unloading) finalAddress += ` [하차지: ${unloading}]`;
-        if (receiver) finalAddress += ` [인수안내: ${receiver}]`;
-
-        // 버튼 로딩 상태 표시
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '⏳ 본사 전송 중...';
-            submitBtn.style.backgroundColor = '#475569';
-        }
-
-        // FormData 객체 빌드 (비동기 multipart/form-data 전송용)
-        const formData = new FormData();
-        formData.append('site_name', document.getElementById('siteNameInput').value);
-        formData.append('requester', document.getElementById('requesterInput').value);
-        formData.append('phone', document.getElementById('requester_phone').value);
-        formData.append('email', document.getElementById('requesterEmailInput').value); // 이메일 필드 연동
-        formData.append('address', finalAddress);
-        formData.append('items', JSON.stringify(items));
-
-        // 1페이지 및 2페이지의 첨부 파일 추가
-        const fileInput1 = document.getElementById('imgLoader1');
-        if (fileInput1 && fileInput1.files) {
-            for (let i = 0; i < fileInput1.files.length; i++) {
-                formData.append('photoFiles', fileInput1.files[i]);
-            }
-        }
-        
-        const fileInput2 = document.getElementById('imgLoader2');
-        if (fileInput2 && fileInput2.files) {
-            for (let i = 0; i < fileInput2.files.length; i++) {
-                formData.append('photoFiles', fileInput2.files[i]);
-            }
-        }
-
+    // 최종 주문 제출 함수 (비동기 Fetch 및 리다이렉트)
+    function submitOrder() {
         try {
-            // 본사 서버의 전송 핸들러를 호출합니다.
-            const response = await fetch(apiHost + '/api/parser/submit-form', {
-                method: 'POST',
-                body: formData
-            });
+            var btn = document.getElementById('realSubmitBtn');
+            var originalText = '🚀 올빌드 본사로 주문 최종전송';
 
-            if (response.ok) {
-                const resData = await response.json();
-                alert(`🎉 [전송 성공] 자재주문서가 본사 데이터베이스로 정상 전송되었습니다!\n접수 품목 수: ${resData.count || items.length}개`);
+            var form = document.getElementById('orderForm');
+            var items = [];
+            var rows = document.getElementById('page1Body').getElementsByTagName('tr');
+            var hasValidItem = false;
+
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                var nameInput = row.querySelector('.material-name');
+                var specInput = row.querySelector('.material-spec');
+                var unitInput = row.querySelector('.material-unit');
+                var qtyInput = row.querySelector('.material-qty');
+                var remarkInput = row.querySelector('.material-remark');
+
+                if (nameInput && qtyInput && nameInput.value.trim() && qtyInput.value) {
+                    hasValidItem = true;
+                    var qty = parseFloat(qtyInput.value) || 1;
+                    var remark = remarkInput && remarkInput.value ? remarkInput.value.trim() : '';
+                    
+                    items.push({
+                        mall_name: '현장직접입력',
+                        product_name: nameInput.value.trim() + (remark ? ' [비고: ' + remark + ']' : ''),
+                        price: 0,
+                        tax: 0,
+                        shipping_fee: 0,
+                        spec: specInput && specInput.value ? specInput.value.trim() : '일반규격',
+                        unit: unitInput && unitInput.value ? unitInput.value.trim() : '개',
+                        qty: qty
+                    });
+                }
+            }
+
+            if (!hasValidItem) {
+                alert("품명과 수량을 최소 한 줄 이상 정확하게 입력하세요!");
+                return;
+            }
+
+            var fullAddrInput = document.getElementById('full_address');
+            var unloadingInput = document.getElementById('unloading_place');
+            var receiverInput = document.getElementById('receiver_info');
+
+            var fullAddr = fullAddrInput && fullAddrInput.value ? fullAddrInput.value.trim() : '';
+            var unloading = unloadingInput && unloadingInput.value ? unloadingInput.value.trim() : '';
+            var receiver = receiverInput && receiverInput.value ? receiverInput.value.trim() : '';
+
+            if (!fullAddr) {
+                alert("배송을 위해 납품 주소를 입력하세요!");
+                return;
+            }
+
+            var finalAddress = fullAddr;
+            if (unloading) finalAddress += ' [하차지: ' + unloading + ']';
+            if (receiver) finalAddress += ' [인수안내: ' + receiver + ']';
+
+            // Hidden fields 값 설정
+            var addressInput = document.getElementById('addressInput');
+            if (addressInput) addressInput.value = finalAddress;
+            
+            var itemsInput = document.getElementById('itemsInput');
+            if (itemsInput) itemsInput.value = JSON.stringify(items);
+            
+            var siteNameHidden = document.getElementById('siteNameHidden');
+            if(siteNameHidden) siteNameHidden.value = document.getElementById('siteNameInput') ? document.getElementById('siteNameInput').value : '';
+            
+            var requesterHidden = document.getElementById('requesterHidden');
+            if(requesterHidden) requesterHidden.value = document.getElementById('requesterInput') ? document.getElementById('requesterInput').value : '';
+            
+            var phoneHidden = document.getElementById('phoneHidden');
+            if(phoneHidden) phoneHidden.value = document.getElementById('requester_phone') ? document.getElementById('requester_phone').value : '';
+            
+            var emailHidden = document.getElementById('emailHidden');
+            if(emailHidden) emailHidden.value = document.getElementById('requesterEmailInput') ? document.getElementById('requesterEmailInput').value : '';
+
+            // 버튼 로딩 상태 표시
+            btn.innerText = '서버로 전송 중입니다...';
+            btn.style.backgroundColor = '#4b5563';
+            btn.disabled = true;
+
+            // [보안 우회] DataTransfer API를 활용하여 메모리에 보존된 압축 이미지(Blob)들을 
+            // 파일 입력 필드(imgLoader1)에 강제 맵핑합니다. 이를 통해 CORS 제한을 받지 않고
+            // 폼을 동기식으로 서버로 날릴 수 있습니다.
+            if (uploadedCompressedFiles.length > 0) {
+                var dataTransfer = new DataTransfer();
+                uploadedCompressedFiles.forEach(function(item) {
+                    // Blob을 File 객체로 승격합니다.
+                    var compressedFile = new File([item.blob], item.blob.name, { type: 'image/jpeg' });
+                    dataTransfer.items.add(compressedFile);
+                });
                 
-                // 전송 성공 시 폼 초기화
-                form.reset();
-                document.getElementById('preview1').innerHTML = '';
-                document.getElementById('preview2').innerHTML = '';
-                syncSiteName();
-            } else {
-                const errText = await response.text();
-                alert(`❌ [전송 실패] 본사 서버에서 에러를 반환했습니다:\n${errText}`);
+                var fileInput = document.getElementById('imgLoader1');
+                if (fileInput) {
+                    fileInput.files = dataTransfer.files;
+                }
             }
-        } catch (err) {
-            console.error('[전송 오류]', err);
-            alert(`❌ [통신 오류] 본사 서버 연결에 실패했습니다. 네트워크 연결을 확인하거나 올빌드 본사 서버 상태를 진단받으십시오.\n(상세: ${err.message})`);
-        } finally {
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalBtnText;
-                submitBtn.style.backgroundColor = '#2563eb';
-            }
+
+            // 폼의 전송 목적지(Action)를 동적으로 재보정합니다.
+            var apiHost = 'https://allbuild-backend.onrender.com';
+            form.action = apiHost + '/api/parser/submit-form';
+
+            // 동기적으로 폼을 서버에 직접 제출합니다. (CORS 보안 우회 완료!)
+            HTMLFormElement.prototype.submit.call(form);
+
+        } catch (error) {
+            alert('자바스크립트 오류 발생: ' + error.message);
+            console.error(error);
         }
-    });
+    }
 </script>
 
 </body>
