@@ -264,6 +264,7 @@
 
         
 
+
         
         </div>
 
@@ -278,6 +279,49 @@
 
 
 <script>
+    // =================================================================
+    // [현장 자재주문요청서 입력값 자동저장 및 복원 기능]
+    // =================================================================
+    // 자동저장 대상 필드들의 ID와 localStorage 키 매핑용 배열입니다.
+    var autoSaveFields = [
+        'siteNameInput',      // 현장명
+        'deptSelect',         // 청구부서
+        'requesterInput',     // 청구자
+        'full_address',       // 납품 주소 (직접 입력)
+        'unloading_place',    // 현장 내 상세 하차지
+        'receiver_info',      // 현장 안내 (인수자)
+        'requester_phone',    // 신청자 연락처 (전화번호)
+        'requesterEmailInput'  // 신청자 이메일 주소
+    ];
+
+    // 페이지 로드가 완료되면 localStorage에 저장된 값을 읽어와 복원하고 이벤트를 바인딩합니다.
+    window.addEventListener('DOMContentLoaded', function() {
+        autoSaveFields.forEach(function(fieldId) {
+            var inputElement = document.getElementById(fieldId);
+            if (inputElement) {
+                // 이전에 저장된 데이터가 있다면 복원합니다.
+                var savedValue = localStorage.getItem('auto_save_' + fieldId);
+                if (savedValue !== null) {
+                    inputElement.value = savedValue;
+                }
+                
+                // 사용자가 값을 입력하거나 선택지를 변경할 때마다 즉시 저장하도록 리스너를 추가합니다.
+                inputElement.addEventListener('input', function() {
+                    localStorage.setItem('auto_save_' + fieldId, this.value);
+                });
+                
+                inputElement.addEventListener('change', function() {
+                    localStorage.setItem('auto_save_' + fieldId, this.value);
+                });
+            }
+        });
+        
+        // 현장명이 성공적으로 복원되었다면, 화면 상단 및 중간에 있는 현장명 텍스트들을 즉시 동기화합니다.
+        if (typeof syncSiteName === 'function') {
+            syncSiteName();
+        }
+    });
+
     // [압축 보관소] 사용자가 등록하고 압축을 완료한 이미지 Blob 파일들을 저장하는 전역 메모리 배열입니다.
     var uploadedCompressedFiles = [];
     
