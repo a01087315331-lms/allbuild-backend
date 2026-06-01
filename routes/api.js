@@ -15,9 +15,8 @@ const nodemailer = require('nodemailer'); // [신규] 이메일 발송을 위한
 
 // 메모리에 파일을 보관하는 multer 설정
 const upload = multer({ storage: multer.memoryStorage() });
-const { extractSelectedProducts, generateReportData, generateAllReports } = require('../utils/reportGenerator');
+const { extractSelectedProducts, generateReportData, generateDailyAndMonthlyReports: generateAllReports } = require('../utils/reportGenerator');
 const Tesseract = require('tesseract.js');
-
 /**
  * [GET] /api/search
  * 상품 스펙(키워드)을 받아 스크래핑 후 결과를 반환합니다.
