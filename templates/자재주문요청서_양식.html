@@ -133,12 +133,12 @@
         <input type="hidden" name="phone" id="phoneHidden">
 
         <h2>■ 현장 및 청구 정보 (PAGE 1)</h2>
-        <div class="grid-3">
+        <div class="grid-3" style="grid-template-columns: 2fr 1fr 1fr 2fr; gap: 15px;">
             <div class="form-group"><label>현장명 <span style="color:red;">*</span></label><input type="text" id="siteNameInput" oninput="syncSiteName()" required placeholder="예: 삼전동 신축공사"></div>
             <div class="form-group"><label>청구부서</label><select id="deptSelect"><option>공사팀</option><option>공무팀</option><option>안전팀</option><option>관리팀</option></select></div>
             <div class="form-group"><label>청구자 <span style="color:red;">*</span></label><input type="text" id="requesterInput" required placeholder="홍길동 과장"></div>
+            <div class="form-group"><label>신청자 이메일 <span style="color:red;">*</span></label><input type="email" id="requesterEmailInput" required placeholder="example@naver.com"></div>
         </div>
-
         <h2>■ 📍 현장 상세 주소 및 하차 위치</h2>
         <!-- [개선] 팝업 연동 방식의 우편번호 및 기본/상세주소 레이아웃 구축 -->
         <div class="form-group">
@@ -488,7 +488,7 @@
         formData.append('site_name', document.getElementById('siteNameInput').value);
         formData.append('requester', document.getElementById('requesterInput').value);
         formData.append('phone', document.getElementById('requester_phone').value);
-        formData.append('email', ''); // 스탠드얼론 폼용 이메일 기본값 설정
+        formData.append('email', document.getElementById('requesterEmailInput').value); // 이메일 필드 연동
         formData.append('address', finalAddress);
         formData.append('items', JSON.stringify(items));
 
