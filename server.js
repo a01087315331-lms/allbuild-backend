@@ -43,10 +43,14 @@ if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 app.use('/uploads', express.static(uploadsDir));
-
 // 기본 테스트용 라우트
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', message: '올빌드 백엔드 서버가 정상적으로 실행 중입니다.' });
+    res.json({ 
+        status: 'ok', 
+        message: '올빌드 백엔드 서버가 정상적으로 실행 중입니다.',
+        emailConfigured: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS),
+        emailUser: process.env.EMAIL_USER || '미설정'
+    });
 });
 
 // 메인 비즈니스 로직 라우터 연결
