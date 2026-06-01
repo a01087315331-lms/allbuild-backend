@@ -944,6 +944,49 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
             console.warn('[로컬 백업 경고] 현장자재요청서 로컬 PC 저장 중 오류 발생:', localErr);
         }
 
+        // [신규 추가] 본사 관리자(allbuild.order@gmail.com) 및 현장 신청자 이메일로 요청서 HTML 자동 발송
+        try {
+            const emailUser = process.env.EMAIL_USER;
+            const emailPass = process.env.EMAIL_PASS;
+
+            if (emailUser && emailPass) {
+                const dns = require('dns');
+                const transporter = nodemailer.createTransport({
+                    host: 'smtp.gmail.com',
+                    port: 587,
+                    secure: false, // 587 포트 사용 시 false (STARTTLS로 자동 업그레이드됨)
+                    auth: {
+                        user: emailUser,
+                        pass: emailPass
+                    },
+                    lookup: (hostname, options, callback) => {
+                        return dns.lookup(hostname, { family: 4 }, callback);
+                    }
+                });
+
+                // 수신자 리스트 구성 (본사 메일 기본, 신청자 메일이 있으면 동시 전송)
+                const recipientList = [emailUser];
+                if (mail && mail.includes('@')) {
+                    recipientList.push(mail);
+                }
+
+                const mailOptions = {
+                    from: `"올빌드 현장 주문 알림" <${emailUser}>`,
+                    to: recipientList.join(', '),
+                    subject: `[올빌드 자재요청] ${site} 현장의 주문요청서가 접수되었습니다. (${worker})`,
+                    html: localHtml // 로컬 저장용 양식과 100% 동일한 HTML 양식 사용
+                };
+
+                const mailInfo = await transporter.sendMail(mailOptions);
+                console.log(`[알림 메일 발송 성공] MessageID: ${mailInfo.messageId}, 수신처: ${recipientList.join(', ')}`);
+            } else {
+                console.warn('[알림 메일 경고] EMAIL_USER 또는 EMAIL_PASS 환경변수가 누락되어 알림 메일을 전송하지 못했습니다.');
+            }
+        } catch (emailErr) {
+            console.error('[알림 메일 오류] 현장 주문 알림 메일 전송 실패:', emailErr);
+            // 이메일 발송이 실패하더라도 이미 DB 저장은 성공하였으므로 사용자 응답은 에러를 처리하지 않고 흘려보냅니다.
+        }
+
         generateAllReports().catch(err => console.error('[보고서 생성 실패]:', err));
 
     } catch (err) {
