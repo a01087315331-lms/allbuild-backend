@@ -782,7 +782,14 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
     const tel = phone ? phone.trim() : '연락처미기재';
     const mail = email ? email.trim() : '이메일미기재';
     const addr = address ? address.trim() : '주소미기재';
-    const parsedItems = JSON.parse(items);
+    
+    let parsedItems;
+    try {
+        parsedItems = JSON.parse(items);
+    } catch (parseErr) {
+        console.error('[API 에러] JSON 파싱 실패:', parseErr);
+        return res.status(400).send('<h2>[오류] 자재 신청 목록 데이터의 형식이 올바르지 않습니다.</h2>');
+    }
     console.log('[DEBUG submit-form] 파싱된 자재 목록(parsedItems):', JSON.stringify(parsedItems, null, 2));
 
     const savedFilesInfo = [];
@@ -982,6 +989,9 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
                         user: emailUser,
                         pass: emailPass
                     },
+                    connectionTimeout: 5000, // 5초 연결 타임아웃
+                    greetingTimeout: 5000,   // 5초 환영 메시지 대기 타임아웃
+                    socketTimeout: 5000,     // 5초 소켓 대기 타임아웃
                     lookup: (hostname, options, callback) => {
                         return dns.lookup(hostname, { family: 4 }, callback);
                     }
