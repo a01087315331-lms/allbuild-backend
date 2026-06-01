@@ -872,17 +872,37 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
             const timeStr = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
             const filename = `올빌드_현장자재요청서_${site}_${dateStr}_${timeStr}.html`;
 
-            const itemRows = parsedItems.map((item, idx) => `
-              <tr style="border-bottom: 1px solid #ddd;">
-                <td style="padding: 10px; text-align: center;">${idx + 1}</td>
-                <td style="padding: 10px;">${item.mall_name || '현장신청'}</td>
-                <td style="padding: 10px; font-weight: bold;">${item.product_name}</td>
-                <td style="padding: 10px;">${item.spec || '-'}</td>
-                <td style="padding: 10px; text-align: center;">${item.unit || 'ea'}</td>
-                <td style="padding: 10px; text-align: right; font-weight: bold; color: #0B3C5D;">${Number(item.qty || item.quantity || 1)}</td>
-                <td style="padding: 10px; color: #666;">-</td>
-              </tr>
-            `).join('');
+            const itemRows = parsedItems.map((item, idx) => {
+                let rawName = item.product_name || '';
+                let brand = '-';
+                let prodName = rawName;
+
+                // 1) 대괄호 포맷 파싱 시도 (예: [현대제철] 철근)
+                const bracketMatch = rawName.match(/^\[([^\]]+)\]\s*(.*)$/);
+                if (bracketMatch) {
+                    brand = bracketMatch[1].trim();
+                    prodName = bracketMatch[2].trim();
+                } else {
+                    // 2) 공백 포맷 파싱 시도 (예: 현대제철 철근)
+                    const spaceIdx = rawName.indexOf(' ');
+                    if (spaceIdx !== -1) {
+                        brand = rawName.substring(0, spaceIdx).trim();
+                        prodName = rawName.substring(spaceIdx + 1).trim();
+                    }
+                }
+
+                return `
+                  <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 10px; text-align: center;">${idx + 1}</td>
+                    <td style="padding: 10px; font-weight: bold; color: #333;">${brand}</td>
+                    <td style="padding: 10px; font-weight: bold;">${prodName}</td>
+                    <td style="padding: 10px;">${item.spec || '-'}</td>
+                    <td style="padding: 10px; text-align: center;">${item.unit || 'ea'}</td>
+                    <td style="padding: 10px; text-align: right; font-weight: bold; color: #0B3C5D;">${Number(item.qty || item.quantity || 1)}</td>
+                    <td style="padding: 10px; color: #666;">-</td>
+                  </tr>
+                `;
+            }).join('');
 
             const localHtml = `
               <!DOCTYPE html>
@@ -967,9 +987,9 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
                     }
                 });
 
-                // 수신자 리스트 구성 (본사 메일 기본, 신청자 메일이 있으면 동시 전송)
-                const recipientList = [emailUser];
-                if (mail && mail.includes('@')) {
+                // 수신자 리스트 구성 (본사 메일 allbuild.order@gmail.com 강제 고정, 신청자 메일이 있으면 동시 전송)
+                const recipientList = ['allbuild.order@gmail.com'];
+                if (mail && mail.includes('@') && mail !== 'allbuild.order@gmail.com') {
                     recipientList.push(mail);
                 }
 
