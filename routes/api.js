@@ -982,9 +982,9 @@ router.post('/parser/submit-form', templateUpload, async (req, res) => {
             if (emailUser && emailPass) {
                 const dns = require('dns');
                 const transporter = nodemailer.createTransport({
-                    host: 'smtp.gmail.com',
-                    port: 587,
-                    secure: false, // 587 포트 사용 시 false (STARTTLS로 자동 업그레이드됨)
+                    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+                    port: Number(process.env.EMAIL_PORT) || 587,
+                    secure: process.env.EMAIL_SECURE === 'true', // true일 경우 SSL, false일 경우 STARTTLS
                     auth: {
                         user: emailUser,
                         pass: emailPass
@@ -1274,13 +1274,16 @@ router.post('/email/send-estimate', async (req, res) => {
         // 실제 Gmail/Naver SMTP 발송 설정
         const dns = require('dns');
         const transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 587,
-            secure: false, // 587 포트 사용 시 false (STARTTLS로 자동 업그레이드됨)
+            host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+            port: Number(process.env.EMAIL_PORT) || 587,
+            secure: process.env.EMAIL_SECURE === 'true', // true일 경우 SSL, false일 경우 STARTTLS
             auth: {
                 user: emailUser,
                 pass: emailPass
             },
+            connectionTimeout: 5000, // 5초 연결 타임아웃
+            greetingTimeout: 5000,   // 5초 환영 메시지 대기 타임아웃
+            socketTimeout: 5000,     // 5초 소켓 대기 타임아웃
             lookup: (hostname, options, callback) => {
                 return dns.lookup(hostname, { family: 4 }, callback);
             }
