@@ -1368,7 +1368,47 @@ router.post('/estimate/save-local', async (req, res) => {
     }
 });
 // [POST] /api/chat - Claude AI 챗봇 프록시
-const axios = require('axios');
+// [POST] /api/chat - Claude AI 챗봇 프록시
+router.post('/chat', async (req, res) => {
+  const { messages, system } = req.body;
+  if (!messages) return res.status(400).json({ error: '메시지가 필요합니다.' });
+  try {
+    const response = await 수파베이스.from('_').select().limit(0).then ? 
+      null : null;
+    const https = require('https');
+    const postData = JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 500,
+      system: system || '',
+      messages: messages
+    });
+    const result = await new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'api.anthropic.com',
+        path: '/v1/messages',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.CLAUDE_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'Content-Length': Buffer.byteLength(postData)
+        }
+      };
+      const req2 = https.request(options, (r) => {
+        let data = '';
+        r.on('data', chunk => data += chunk);
+        r.on('end', () => resolve(JSON.parse(data)));
+      });
+      req2.on('error', reject);
+      req2.write(postData);
+      req2.end();
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('[챗봇 오류]', error.message);
+    res.status(500).json({ error: '챗봇 오류: ' + error.message });
+  }
+});
 router.post('/chat', async (req, res) => {
   const { messages, system } = req.body;
   if (!messages) return res.status(400).json({ error: '메시지가 필요합니다.' });
