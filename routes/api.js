@@ -1367,6 +1367,30 @@ router.post('/estimate/save-local', async (req, res) => {
         return res.status(500).json({ error: `견적서를 로컬 PC에 보관하는 중 오류가 발생했습니다: ${error.message}` });
     }
 });
-
+// [POST] /api/chat - Claude AI 챗봇 프록시
+router.post('/chat', async (req, res) => {
+  const { messages, system } = req.body;
+  if (!messages) return res.status(400).json({ error: '메시지가 필요합니다.' });
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 500,
+        system: system || '',
+        messages: messages
+      })
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: '챗봇 오류: ' + error.message });
+  }
+});
 module.exports = router;
 
