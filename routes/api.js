@@ -1368,28 +1368,27 @@ router.post('/estimate/save-local', async (req, res) => {
     }
 });
 // [POST] /api/chat - Claude AI 챗봇 프록시
+const axios = require('axios');
 router.post('/chat', async (req, res) => {
   const { messages, system } = req.body;
   if (!messages) return res.status(400).json({ error: '메시지가 필요합니다.' });
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
+    const response = await axios.post('https://api.anthropic.com/v1/messages', {
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 500,
+      system: system || '',
+      messages: messages
+    }, {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': process.env.CLAUDE_API_KEY,
         'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 500,
-        system: system || '',
-        messages: messages
-      })
+      }
     });
-    const data = await response.json();
-    res.json(data);
+    res.json(response.data);
   } catch (error) {
-    res.status(500).json({ error: '챗봇 오류: ' + error.message });
+    console.error('[챗봇 오류]', error.response?.data || error.message);
+    res.status(500).json({ error: '챗봇 오류: ' + (error.response?.data?.error?.message || error.message) });
   }
 });
 module.exports = router;
