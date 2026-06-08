@@ -1242,9 +1242,8 @@ router.post('/orders/:id/receipt', upload.single('receiptImage'), async (req, re
  * 발행된 견적서 내용을 지정된 이메일 주소로 전송합니다.
  */
 router.post('/email/send-estimate', async (req, res) => {
-    const { to, subject, htmlContent } = req.body;
-
-    if (!to || !subject || !htmlContent) {
+    const { to, subject, htmlContent, pdfBase64, filename } = req.body;
+    if (!to || !subject) {
         return res.status(400).json({ error: '수신자 메일 주소, 제목, 견적서 내용이 누락되었습니다.' });
     }
 
@@ -1289,12 +1288,18 @@ router.post('/email/send-estimate', async (req, res) => {
             }
         });
 
-        const mailOptions = {
-            from: `"올빌드 본사 관리자" <${emailUser}>`,
-            to: to,
-            subject: subject,
-            html: htmlContent
-        };
+       const mailOptions = {
+    from: `"올빌드 본사 관리자" <${emailUser}>`,
+    to: to,
+    subject: subject,
+    text: '올빌드 견적서를 PDF 파일로 첨부하여 발송합니다.',
+    attachments: pdfBase64 ? [{
+        filename: filename || '올빌드_견적서.pdf',
+        content: pdfBase64,
+        encoding: 'base64',
+        contentType: 'application/pdf'
+    }] : []
+}; 
 
         const info = await transporter.sendMail(mailOptions);
         console.log('[이메일 전송 성공] MessageID:', info.messageId);
