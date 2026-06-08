@@ -7,6 +7,7 @@ const helmet = require('helmet'); // [보안] 웹 취약점 방어를 위한 Hel
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
+const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -56,6 +57,24 @@ app.get('/api/health', (req, res) => {
 // 메인 비즈니스 로직 라우터 연결
 const apiRoutes = require('./routes/api');
 app.use('/api', apiRoutes);
+// [스케줄러] 매월 말일 20시 경비 자동 이메일
+cron.schedule('0 20 28-31 * *', async () => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (tomorrow.getDate() !== 1) return;
+    console.log('[스케줄러] 말일 경비 자동 이메일 발송 시작');
+    try {
+        const res = await fetch(`http://localhost:${PORT}/api/expense/auto-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        console.log('[스케줄러] 결과:', data.message);
+    } catch(e) {
+        console.error('[스케줄러] 오류:', e.message);
+    }
+});
 
 // 서버 시작
 app.listen(PORT, '0.0.0.0', () => {
