@@ -1430,5 +1430,73 @@ router.post('/chat', async (req, res) => {
     res.status(500).json({ error: '챗봇 오류: ' + (error.response?.data?.error?.message || error.message) });
   }
 });
+
+/**
+ * [POST] /api/expense/auto-email
+ * 당월 경비 내역을 CSV로 만들어 이메일 자동 발송
+ */
+router.post('/expense/auto-email', async (req, res) => {
+    try {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const startDate = `${year}-${month}-01`;
+        const nextMonth = new Date(year, now.getMonth() + 1, 1);
+        const endDate = nextMonth.toISOString().split('T')[0];
+
+        const { data: expenses, error } = await supabase
+            .from('expenses')
+            .select('*')
+            .gte('exp_date', startDate)
+            .lt('exp_date', endDate)
+            .order('exp_date', { ascending: true });
+
+        if (error) throw error;
+
+        if (!expenses || expenses.length === 0) {
+            return res.json({ success: true, message: '발송할 경비 내역이 없습니다.' });
+        }
+
+        let csv = '\uFEFF날짜,항목,내용,공급가액,부가세,합계,증빙\n';
+        expenses.forEach(e => {
+            const amt = Number(e.amount || 0);
+            const tax = e.has_vat ? Math.round(amt / 11) : 0;
+            const supply = amt - tax;
+            csv += `${e.exp_date},${e.category},${e.description},${supply},${tax},${amt},${e.receipt_type || ''}\n`;
+        });
+
+        const emailUser = process.env.EMAIL_USER;
+        const emailPass = process.env.EMAIL_PASS;
+        if (!emailUser || !emailPass) throw new Error('이메일 환경변수 미설정');
+
+        const transporter = nodemailer.createTransport({
+            host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+            port: Number(process.env.EMAIL_PORT) || 587,
+            secure: false,
+            auth: { user: emailUser, pass: emailPass }
+        });
+
+        const totalAmt = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+        await transporter.sendMail({
+            from: `"올빌드 자동발송" <${emailUser}>`,
+            to: emailUser,
+            subject: `[올빌드] ${year}년 ${month}월 경비 내역`,
+            text: `${year}년 ${month}월 경비 내역 첨부파일을 확인해주세요.\n총 ${expenses.length}건 / 합계 ${totalAmt.toLocaleString()}원`,
+            attachments: [{
+                filename: `올빌드_경비내역_${year}년${month}월.csv`,
+                content: csv,
+                encoding: 'utf-8',
+                contentType: 'text/csv'
+            }]
+        });
+
+        console.log(`[자동이메일] ${year}년 ${month}월 경비 발송 완료`);
+        return res.json({ success: true, message: `${year}년 ${month}월 경비 이메일 발송 완료` });
+
+    } catch (error) {
+        console.error('[자동이메일 오류]:', error);
+        return res.status(500).json({ error: error.message });
+    }
+});
 module.exports = router;
 
