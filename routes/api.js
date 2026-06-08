@@ -531,7 +531,7 @@ router.get('/auth/check-setup', async (req, res) => {
  * 최초 비밀번호를 설정합니다. (비밀번호 6자 이상 강력 제한 규칙 적용)
  */
 router.post('/auth/setup', async (req, res) => {
-    const { password } = req.body;
+    const { username = 'allbuild', password } = req.body;
     if (!password) {
         return res.status(400).json({ error: '비밀번호가 필요합니다.' });
     }
@@ -546,7 +546,7 @@ router.post('/auth/setup', async (req, res) => {
         const { data: existing } = await supabase
             .from('member_accounts')
             .select('id, password_hash')
-            .eq('username', 'allbuild')
+            .eq('username', username)
             .single();
 
         const hashedPassword = await hashPassword(password);
