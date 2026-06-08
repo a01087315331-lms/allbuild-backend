@@ -28,7 +28,7 @@ app.use(helmet({
 app.use(cors()); 
 
 // [보안] 요청 본문 크기 제한
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // [보고서] 보고서 폴더 확보 및 정적 오픈 연동
 const reportsDir = path.join(__dirname, 'reports');
