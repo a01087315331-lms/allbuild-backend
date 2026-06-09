@@ -1498,5 +1498,40 @@ router.post('/expense/auto-email', async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
 });
+/**
+ * [GET] /api/naver-shopping
+ * 네이버 쇼핑 API로 자재 최저가 검색
+ */
+router.get('/naver-shopping', async (req, res) => {
+  const { keyword } = req.query;
+  if (!keyword) return res.status(400).json({ error: '검색어가 필요합니다.' });
+
+  try {
+    const https = require('https');
+    const query = encodeURIComponent(keyword);
+    const result = await new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'openapi.naver.com',
+        path: `/v1/search/shop.json?query=${query}&display=10&sort=asc`,
+        method: 'GET',
+        headers: {
+          'X-Naver-Client-Id': process.env.NAVER_CLIENT_ID,
+          'X-Naver-Client-Secret': process.env.NAVER_CLIENT_SECRET
+        }
+      };
+      const req2 = https.request(options, (r) => {
+        let data = '';
+        r.on('data', chunk => data += chunk);
+        r.on('end', () => resolve(JSON.parse(data)));
+      });
+      req2.on('error', reject);
+      req2.end();
+    });
+    res.json({ success: true, items: result.items || [] });
+  } catch (err) {
+    console.error('[네이버 쇼핑 오류]', err.message);
+    res.status(500).json({ error: '네이버 쇼핑 검색 오류: ' + err.message });
+  }
+});
 module.exports = router;
 
