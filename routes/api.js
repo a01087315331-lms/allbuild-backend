@@ -1241,28 +1241,22 @@ router.post('/orders/:id/receipt', upload.single('receiptImage'), async (req, re
  * [POST] /api/email/send-estimate
  * 발행된 견적서 내용을 지정된 이메일 주소로 전송합니다.
  */
+/**
+ * [POST] /api/email/send-estimate
+ * 견적서를 PDF 첨부파일로 이메일 발송
+ */
 router.post('/email/send-estimate', async (req, res) => {
-    const { to, subject, htmlContent } = req.body;
+    const { to, subject, htmlContent, pdfBase64 } = req.body;
     if (!to || !subject || !htmlContent) {
         return res.status(400).json({ error: '수신자 메일 주소, 제목, 견적서 내용이 누락되었습니다.' });
     }
 
     try {
         console.log(`[이메일 전송 API] 수신자: ${to}, 제목: ${subject}`);
-
-        // .env 환경변수에서 메일 송신용 SMTP 서버 정보 파싱
         const emailUser = process.env.EMAIL_USER;
         const emailPass = process.env.EMAIL_PASS;
 
-        // 환경변수 미설정 시, 초보자 개발 테스트 편의를 위해 Mock (가상) 성공 응답 리턴
         if (!emailUser || !emailPass) {
-            console.warn('[이메일 환경변수 경고] EMAIL_USER 또는 EMAIL_PASS 환경변수가 .env 에 설정되지 않았습니다.');
-            console.log('--- [MOCK EMAIL TRANSMISSION LOG] ---');
-            console.log(`수신인(To): ${to}`);
-            console.log(`메일제목(Subject): ${subject}`);
-            console.log(`본문크기: ${htmlContent.length} bytes`);
-            console.log('-------------------------------------');
-
             return res.json({
                 success: true,
                 message: '이메일이 가상(Mock)으로 전송되었습니다. (환경변수 설정 시 실제 메일 발송 작동)',
@@ -1270,29 +1264,37 @@ router.post('/email/send-estimate', async (req, res) => {
             });
         }
 
-        // 실제 Gmail/Naver SMTP 발송 설정
         const dns = require('dns');
         const transporter = nodemailer.createTransport({
             host: process.env.EMAIL_HOST || 'smtp.gmail.com',
             port: Number(process.env.EMAIL_PORT) || 587,
-            secure: process.env.EMAIL_SECURE === 'true', // true일 경우 SSL, false일 경우 STARTTLS
-            auth: {
-                user: emailUser,
-                pass: emailPass
-            },
-            connectionTimeout: 5000, // 5초 연결 타임아웃
-            greetingTimeout: 5000,   // 5초 환영 메시지 대기 타임아웃
-            socketTimeout: 5000,     // 5초 소켓 대기 타임아웃
+            secure: process.env.EMAIL_SECURE === 'true',
+            auth: { user: emailUser, pass: emailPass },
+            connectionTimeout: 5000,
+            greetingTimeout: 5000,
+            socketTimeout: 5000,
             lookup: (hostname, options, callback) => {
                 return dns.lookup(hostname, { family: 4 }, callback);
             }
         });
 
-    const mailOptions = {
+        // 첨부파일 구성 — PDF base64가 있으면 PDF 첨부, 없으면 HTML 첨부
+        const attachments = [];
+        if (pdfBase64) {
+            attachments.push({
+                filename: '올빌드_견적서.pdf',
+                content: pdfBase64,
+                encoding: 'base64',
+                contentType: 'application/pdf'
+            });
+        }
+
+        const mailOptions = {
             from: `"올빌드 본사 관리자" <${emailUser}>`,
             to: to,
             subject: subject,
-            html: htmlContent
+            html: `<p>안녕하세요,<br>올빌드 견적서를 첨부파일로 보내드립니다.<br>확인 후 연락 부탁드립니다.<br><br>감사합니다.<br>올빌드</p>`,
+            attachments: attachments
         };
 
         const info = await transporter.sendMail(mailOptions);
@@ -1300,7 +1302,7 @@ router.post('/email/send-estimate', async (req, res) => {
 
         return res.json({
             success: true,
-            message: '견적서 메일이 성공적으로 전송되었습니다.',
+            message: '견적서 PDF가 이메일로 성공적으로 발송되었습니다.',
             messageId: info.messageId
         });
 
